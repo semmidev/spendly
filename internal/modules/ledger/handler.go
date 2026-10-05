@@ -22,7 +22,6 @@ func (h *Handler) Mount(r chi.Router) {
 	r.Post("/transactions/{id}/restore", h.restore)
 	r.Get("/categories", h.categories)
 	r.Post("/categories", h.createCategory)
-	h.MountRecurring(r)
 }
 
 func parseFilter(r *http.Request) Filter {

@@ -32,7 +32,7 @@ func (h *Handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 	uid, _ := web.UserID(r.Context())
 	rows, err := h.svc.pool.Query(r.Context(), `SELECT t.id::text, t.amount, t.currency, t.occurred_at,
 		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, t.status,
-		t.duplicate_of::text, t.confidence
+		t.duplicate_of::text, t.confidence, COALESCE(t.payment_source,'')
 		FROM transactions t LEFT JOIN merchants m ON m.id=t.merchant_id LEFT JOIN categories c ON c.id=t.category_id
 		WHERE t.user_id=$1 AND t.deleted_at IS NULL AND t.status='needs_review'
 		ORDER BY t.created_at DESC LIMIT 50`, uid)
@@ -45,13 +45,14 @@ func (h *Handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id string
 		var amount int64
-		var currency, merch, cat, note, source, status string
+		var currency, merch, cat, note, source, status, payment string
 		var at any
 		var dupOf, conf any
-		if err := rows.Scan(&id, &amount, &currency, &at, &merch, &cat, &note, &source, &status, &dupOf, &conf); err == nil {
+		if err := rows.Scan(&id, &amount, &currency, &at, &merch, &cat, &note, &source, &status, &dupOf, &conf, &payment); err == nil {
 			items = append(items, map[string]any{"id": id, "amount": amount, "currency": currency,
 				"occurred_at": at, "merchant": merch, "category": cat, "note": note,
-				"source": source, "status": status, "duplicate_of": dupOf, "confidence": conf})
+				"source": source, "status": status, "duplicate_of": dupOf, "confidence": conf,
+				"payment_source": payment})
 		}
 	}
 	web.Success(w, http.StatusOK, "Antrean review", map[string]any{"items": items}, nil)
@@ -83,7 +84,7 @@ func (h *Handler) ignore(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 	uid, _ := web.UserID(r.Context())
 	trows, err := h.svc.pool.Query(r.Context(), `SELECT t.id::text, t.amount, t.currency, t.occurred_at,
-		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source
+		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, COALESCE(t.payment_source,'')
 		FROM transactions t LEFT JOIN merchants m ON m.id=t.merchant_id LEFT JOIN categories c ON c.id=t.category_id
 		WHERE t.user_id=$1 AND t.deleted_at IS NULL AND t.status='ignored'
 		ORDER BY t.created_at DESC LIMIT 50`, uid)
@@ -96,11 +97,12 @@ func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 	for trows.Next() {
 		var id string
 		var amount int64
-		var currency, merch, cat, note, source string
+		var currency, merch, cat, note, source, payment string
 		var at any
-		if err := trows.Scan(&id, &amount, &currency, &at, &merch, &cat, &note, &source); err == nil {
+		if err := trows.Scan(&id, &amount, &currency, &at, &merch, &cat, &note, &source, &payment); err == nil {
 			txns = append(txns, map[string]any{"id": id, "amount": amount, "currency": currency,
-				"occurred_at": at, "merchant": merch, "category": cat, "note": note, "source": source})
+				"occurred_at": at, "merchant": merch, "category": cat, "note": note, "source": source,
+				"payment_source": payment})
 		}
 	}
 	erows, _ := h.svc.pool.Query(r.Context(), `SELECT r.id::text, r.gmail_message_id, r.ignore_reason, r.received_at

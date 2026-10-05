@@ -79,12 +79,16 @@ func (s *Service) AllowedDomains(ctx context.Context, connectionID string) []str
 	return out
 }
 
-func buildQuery(domains []string, after time.Time) string {
+func buildQuery(domains []string, after, before time.Time) string {
 	var ors []string
 	for _, d := range domains {
 		ors = append(ors, strings.TrimSpace(d))
 	}
-	return fmt.Sprintf("from:(%s) after:%d", strings.Join(ors, " OR "), after.Unix())
+	q := fmt.Sprintf("from:(%s) after:%d", strings.Join(ors, " OR "), after.Unix())
+	if !before.IsZero() {
+		q += fmt.Sprintf(" before:%d", before.Unix())
+	}
+	return q
 }
 
 func senderDomain(from string) string {
@@ -150,6 +154,8 @@ func windowDays(window string) int {
 		return time.Now().Day()
 	case "90d":
 		return 90
+	case "custom":
+		return 0 // rentang eksplisit scan_from/scan_to
 	default:
 		return 30
 	}
@@ -157,7 +163,7 @@ func windowDays(window string) int {
 
 func validWindow(w string) bool {
 	switch w {
-	case "1d", "7d", "month", "30d", "90d":
+	case "1d", "7d", "month", "30d", "90d", "custom":
 		return true
 	}
 	return false
@@ -183,9 +189,10 @@ func (s *Service) runSync(ctx context.Context, uid, connectionID string, forceDa
 	var st Stats
 	var encTok, historyID, window string
 	var scanLimit int
-	err := s.pool.QueryRow(ctx, `SELECT enc_refresh_token, COALESCE(history_id,''), scan_window, scan_limit
+	var scanFrom, scanTo *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT enc_refresh_token, COALESCE(history_id,''), scan_window, scan_limit, scan_from, scan_to
 		FROM gmail_connections WHERE id=$1::uuid AND user_id=$2 AND status='active'`,
-		connectionID, uid).Scan(&encTok, &historyID, &window, &scanLimit)
+		connectionID, uid).Scan(&encTok, &historyID, &window, &scanLimit, &scanFrom, &scanTo)
 	if err != nil {
 		return st, apperr.NotFound("koneksi Gmail tidak ditemukan / tidak aktif")
 	}
@@ -205,25 +212,40 @@ func (s *Service) runSync(ctx context.Context, uid, connectionID string, forceDa
 		return st, err
 	}
 
-	days := windowDays(window)
-	if forceDays > 0 {
-		days = forceDays
-	}
 	limit := scanLimit
 	if maxEmails > 0 {
 		limit = maxEmails
 	}
+
+	var after, before time.Time
+	days := windowDays(window)
+	mode := "incremental"
+	switch {
+	case window == "custom" && scanFrom != nil && scanTo != nil:
+		// Rentang eksplisit; `before` eksklusif di Gmail → +1 hari agar `scan_to` ikut.
+		after = time.Date(scanFrom.Year(), scanFrom.Month(), scanFrom.Day(), 0, 0, 0, 0, time.Local)
+		before = time.Date(scanTo.Year(), scanTo.Month(), scanTo.Day(), 0, 0, 0, 0, time.Local).AddDate(0, 0, 1)
+		days = int(before.Sub(after).Hours() / 24)
+		mode = "backfill"
+	case forceDays > 0:
+		after = time.Now().AddDate(0, 0, -forceDays)
+		mode = "backfill"
+	default:
+		if days <= 0 {
+			days = 30
+		}
+		after = time.Now().AddDate(0, 0, -days)
+		if historyID == "" {
+			mode = "backfill"
+		}
+	}
 	st.Limit, st.BackfillDays = limit, days
 
-	mode := "incremental"
-	if historyID == "" || forceDays > 0 {
-		mode = "backfill"
-	}
 	slog.Info("sync mulai", "conn", shortID(connectionID), "mode", mode, "days", days, "limit", limit, "senders", len(allowed))
 	report(Progress{Status: "running", Mode: mode, Total: limit, Message: "menyiapkan"})
 
 	if mode == "backfill" {
-		st, err = s.backfill(ctx, client, connectionID, allowed, days, limit, gate, report)
+		st, err = s.backfill(ctx, client, connectionID, allowed, after, before, limit, gate, report)
 	} else {
 		st, err = s.incremental(ctx, client, connectionID, allowed, historyID, limit, gate, report)
 	}
@@ -238,6 +260,15 @@ func (s *Service) runSync(ctx context.Context, uid, connectionID string, forceDa
 		}
 		slog.Error("sync gagal", "conn", shortID(connectionID), "mode", mode, "error", err)
 		return st, err
+	}
+
+	// Pemulihan: email yang transaksinya dihapus manual dikembalikan ke antrean
+	// agar diekstrak ulang lalu diaktifkan kembali (CreateEmail restore + update).
+	if _, err := s.pool.Exec(ctx, `UPDATE raw_emails r SET status='fetched'
+		WHERE r.connection_id=$1::uuid AND r.status <> 'fetched'
+		AND EXISTS (SELECT 1 FROM transactions t WHERE t.raw_email_id=r.id AND t.deleted_at IS NOT NULL)`,
+		connectionID); err != nil {
+		slog.Warn("gagal reset raw_emails terhapus", "conn", shortID(connectionID), "error", err)
 	}
 
 	// ekstraksi inline terbatas; ikut batas scan
@@ -258,13 +289,18 @@ func isInvalidGrant(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "invalid_grant")
 }
 
-func (s *Service) backfill(ctx context.Context, client gmailClient, connectionID string, allowed map[string]bool, days, limit int, gate func() error, report func(Progress)) (Stats, error) {
+func (s *Service) backfill(ctx context.Context, client gmailClient, connectionID string, allowed map[string]bool, after, before time.Time, limit int, gate func() error, report func(Progress)) (Stats, error) {
 	var st Stats
-	st.BackfillDays, st.Limit = days, limit
-	if days <= 0 || days > 365 {
-		days = 30
+	if after.IsZero() {
+		after = time.Now().AddDate(0, 0, -30)
 	}
-	q := buildQuery(keys(allowed), time.Now().AddDate(0, 0, -days))
+	st.Limit = limit
+	if !before.IsZero() {
+		st.BackfillDays = int(before.Sub(after).Hours() / 24)
+	} else {
+		st.BackfillDays = int(time.Since(after).Hours() / 24)
+	}
+	q := buildQuery(keys(allowed), after, before)
 	pageToken := ""
 	processed := 0
 	for page := 0; page < 20; page++ {
@@ -314,14 +350,14 @@ func (s *Service) incremental(ctx context.Context, client gmailClient, connectio
 	st.Limit = limit
 	hid, err := strconv.ParseUint(strings.TrimSpace(historyID), 10, 64)
 	if err != nil || hid == 0 {
-		return s.backfill(ctx, client, connectionID, allowed, 7, limit, gate, report)
+		return s.backfill(ctx, client, connectionID, allowed, time.Now().AddDate(0, 0, -7), time.Time{}, limit, gate, report)
 	}
 	ids, newHID, expired, err := client.HistoryAdded(ctx, hid)
 	if err != nil {
 		return st, err
 	}
 	if expired {
-		return s.backfill(ctx, client, connectionID, allowed, 7, limit, gate, report)
+		return s.backfill(ctx, client, connectionID, allowed, time.Now().AddDate(0, 0, -7), time.Time{}, limit, gate, report)
 	}
 	st.Listed = len(ids)
 	processed := 0
@@ -422,106 +458,54 @@ func (s *Service) extractNew(ctx context.Context, connectionID string, limit int
 	return n
 }
 
-// ---- discover & status ----
+// ---- sender registry & status ----
 
-type SenderSuggestion struct {
-	Domain        string `json:"domain"`
-	Count         int    `json:"count"`
-	SampleSubject string `json:"sample_subject"`
-	Suggested     bool   `json:"suggested"`
-	Allowed       bool   `json:"allowed"`
+// AddSender menambah entri sender registry manual (is_seed=false) milik user.
+func (s *Service) AddSender(ctx context.Context, uid, domain, label string) (map[string]any, error) {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	domain = strings.TrimSpace(strings.TrimPrefix(domain, "@"))
+	label = strings.TrimSpace(label)
+	if domain == "" {
+		return nil, apperr.Invalid("domain pengirim wajib diisi")
+	}
+	if label == "" {
+		label = domain
+	}
+	var id, outDomain, outLabel string
+	err := s.pool.QueryRow(ctx, `INSERT INTO sender_registry (domain, label, is_seed, enabled, created_by)
+		VALUES ($1,$2,false,true,$3)
+		ON CONFLICT (domain) DO UPDATE SET label=EXCLUDED.label
+		WHERE sender_registry.created_by = $3
+		RETURNING id::text, domain, label`, domain, label, uid).Scan(&id, &outDomain, &outLabel)
+	if err != nil {
+		return nil, apperr.Conflict("domain sudah terdaftar")
+	}
+	return map[string]any{"id": id, "domain": outDomain, "label": outLabel, "is_seed": false, "can_delete": true}, nil
 }
 
-// Discover: header 90 hari terakhir, kelompokkan per sender (PLAN §3.1).
-func (s *Service) Discover(ctx context.Context, uid, connectionID string) ([]SenderSuggestion, error) {
-	var encTok string
-	err := s.pool.QueryRow(ctx, `SELECT enc_refresh_token FROM gmail_connections
-		WHERE id=$1::uuid AND user_id=$2 AND status='active'`, connectionID, uid).Scan(&encTok)
+// DeleteSender menghapus entri manual milik user; seed / milik user lain ditolak.
+func (s *Service) DeleteSender(ctx context.Context, uid, id string) error {
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return nil, apperr.NotFound("koneksi Gmail tidak ditemukan / tidak aktif")
+		return err
 	}
-	rt, err := s.enc.Decrypt(encTok)
-	if err != nil {
-		return nil, err
+	defer func() { _ = tx.Rollback(ctx) }()
+	var domain string
+	if err := tx.QueryRow(ctx, `DELETE FROM sender_registry WHERE id=$1::uuid AND created_by=$2 RETURNING domain`, id, uid).Scan(&domain); err != nil {
+		return apperr.NotFound("pengirim tidak ditemukan atau bukan milik Anda")
 	}
-	client, err := s.newClient(ctx, rt)
-	if err != nil {
-		return nil, err
-	}
-	allowed := map[string]bool{}
-	for _, d := range s.AllowedDomains(ctx, connectionID) {
-		allowed[strings.ToLower(d)] = true
-	}
-	after := time.Now().AddDate(0, 0, -90)
-	q := fmt.Sprintf("after:%d", after.Unix())
-	type agg struct {
-		count   int
-		sample  string
-		txCount int
-	}
-	groups := map[string]*agg{}
-	pageToken := ""
-	for page := 0; page < 5; page++ {
-		ids, next, err := client.ListIDs(ctx, q, pageToken)
-		if err != nil {
-			return nil, err
-		}
-		for _, id := range ids {
-			m, err := client.GetMetadata(ctx, id)
-			if err != nil {
-				continue
-			}
-			var from, subj string
-			for _, h := range m.Payload.Headers {
-				switch h.Name {
-				case "From":
-					from = h.Value
-				case "Subject":
-					subj = h.Value
-				}
-			}
-			dom := senderDomain(from)
-			if dom == "" {
-				continue
-			}
-			g := groups[dom]
-			if g == nil {
-				g = &agg{}
-				groups[dom] = g
-			}
-			g.count++
-			if g.sample == "" {
-				g.sample = subj
-			}
-			if TxHints(subj) {
-				g.txCount++
-			}
-		}
-		pageToken = next
-		if pageToken == "" {
-			break
-		}
-	}
-	var out []SenderSuggestion
-	for dom, g := range groups {
-		if g.count < 2 && g.txCount == 0 {
-			continue
-		}
-		out = append(out, SenderSuggestion{
-			Domain: dom, Count: g.count, SampleSubject: g.sample,
-			Suggested: g.txCount > 0, Allowed: allowed[dom],
-		})
-	}
-	return out, nil
+	_, _ = tx.Exec(ctx, `DELETE FROM user_senders WHERE sender_domain=$1`, domain)
+	return tx.Commit(ctx)
 }
 
 func (s *Service) Status(ctx context.Context, uid, connectionID string) (map[string]any, error) {
 	var lastSynced any
 	var histID, status, window string
 	var backfillDays, scanLimit int
-	err := s.pool.QueryRow(ctx, `SELECT last_synced_at, COALESCE(history_id,''), status, backfill_days, scan_limit, scan_window
+	var scanFrom, scanTo *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT last_synced_at, COALESCE(history_id,''), status, backfill_days, scan_limit, scan_window, scan_from, scan_to
 		FROM gmail_connections WHERE id=$1::uuid AND user_id=$2`, connectionID, uid).
-		Scan(&lastSynced, &histID, &status, &backfillDays, &scanLimit, &window)
+		Scan(&lastSynced, &histID, &status, &backfillDays, &scanLimit, &window, &scanFrom, &scanTo)
 	if err != nil {
 		return nil, apperr.NotFound("koneksi Gmail tidak ditemukan")
 	}
@@ -539,23 +523,42 @@ func (s *Service) Status(ctx context.Context, uid, connectionID string) (map[str
 	}
 	var total int
 	_ = s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM raw_emails WHERE connection_id=$1::uuid`, connectionID).Scan(&total)
-	return map[string]any{
+	out := map[string]any{
 		"status": status, "last_synced_at": lastSynced,
 		"history_cursor": histID != "", "counts": counts, "total_scanned": total,
 		"backfill_days": backfillDays, "scan_limit": scanLimit, "scan_window": window,
-	}, nil
+	}
+	if scanFrom != nil {
+		out["scan_from"] = scanFrom.Format("2006-01-02")
+	}
+	if scanTo != nil {
+		out["scan_to"] = scanTo.Format("2006-01-02")
+	}
+	return out, nil
 }
 
 // SetSettings menyimpan preferensi scan (jendela + batas email per sync).
-func (s *Service) SetSettings(ctx context.Context, uid, connectionID, window string, scanLimit int) error {
+// window="custom" memakai rentang eksplisit scanFrom/scanTo (YYYY-MM-DD).
+func (s *Service) SetSettings(ctx context.Context, uid, connectionID, window string, scanLimit int, scanFrom, scanTo string) error {
 	if !validWindow(window) {
 		window = "30d"
 	}
 	if scanLimit <= 0 || scanLimit > 1000 {
 		scanLimit = 100
 	}
-	ct, err := s.pool.Exec(ctx, `UPDATE gmail_connections SET scan_window=$3, backfill_days=$4, scan_limit=$5
-		WHERE id=$1::uuid AND user_id=$2`, connectionID, uid, window, windowDays(window), scanLimit)
+	var fromArg, toArg any
+	backfillDays := windowDays(window)
+	if window == "custom" {
+		f, ferr := time.Parse("2006-01-02", scanFrom)
+		t, terr := time.Parse("2006-01-02", scanTo)
+		if ferr != nil || terr != nil || t.Before(f) {
+			return apperr.Invalid("rentang tanggal tidak valid")
+		}
+		fromArg, toArg = f, t
+		backfillDays = int(t.Sub(f).Hours()/24) + 1
+	}
+	ct, err := s.pool.Exec(ctx, `UPDATE gmail_connections SET scan_window=$3, backfill_days=$4, scan_limit=$5, scan_from=$6, scan_to=$7
+		WHERE id=$1::uuid AND user_id=$2`, connectionID, uid, window, backfillDays, scanLimit, fromArg, toArg)
 	if err != nil {
 		return err
 	}

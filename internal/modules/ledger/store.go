@@ -11,15 +11,16 @@ import (
 
 // Transaction: uang BIGINT minor unit + currency (PLAN §6). Hanya pengeluaran.
 type Transaction struct {
-	ID         string    `json:"id"`
-	Amount     int64     `json:"amount"`
-	Currency   string    `json:"currency"`
-	OccurredAt time.Time `json:"occurred_at"`
-	Merchant   string    `json:"merchant,omitempty"`
-	Category   string    `json:"category"`
-	Note       string    `json:"note,omitempty"`
-	Source     string    `json:"source"`
-	Status     string    `json:"status,omitempty"`
+	ID            string    `json:"id"`
+	Amount        int64     `json:"amount"`
+	Currency      string    `json:"currency"`
+	OccurredAt    time.Time `json:"occurred_at"`
+	Merchant      string    `json:"merchant,omitempty"`
+	Category      string    `json:"category"`
+	Note          string    `json:"note,omitempty"`
+	Source        string    `json:"source"`
+	Status        string    `json:"status,omitempty"`
+	PaymentSource string    `json:"payment_source,omitempty"`
 }
 
 type Filter struct {
@@ -80,7 +81,7 @@ func (s *Store) listPG(ctx context.Context, f Filter, uid string) ([]Transaction
 	limit, offset := pageArgs(f.Page, f.Limit)
 	args = append(args, limit, offset)
 	rows, err := s.pool.Query(ctx, `SELECT t.id, t.amount, t.currency, t.occurred_at,
-		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, t.status
+		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, t.status, COALESCE(t.payment_source,'')
 		FROM transactions t LEFT JOIN merchants m ON m.id=t.merchant_id LEFT JOIN categories c ON c.id=t.category_id
 		WHERE `+where+` ORDER BY t.occurred_at DESC, t.created_at DESC LIMIT $`+itoa(len(args)-1)+` OFFSET $`+itoa(len(args)), args...)
 	if err != nil {
@@ -91,7 +92,7 @@ func (s *Store) listPG(ctx context.Context, f Filter, uid string) ([]Transaction
 	for rows.Next() {
 		var t Transaction
 		var id string
-		if err := rows.Scan(&id, &t.Amount, &t.Currency, &t.OccurredAt, &t.Merchant, &t.Category, &t.Note, &t.Source, &t.Status); err != nil {
+		if err := rows.Scan(&id, &t.Amount, &t.Currency, &t.OccurredAt, &t.Merchant, &t.Category, &t.Note, &t.Source, &t.Status, &t.PaymentSource); err != nil {
 			continue
 		}
 		t.ID = id
@@ -106,7 +107,7 @@ func (s *Store) listPG(ctx context.Context, f Filter, uid string) ([]Transaction
 // All mengembalikan seluruh transaksi user (tanpa paginasi) — untuk export.
 func (s *Store) All(uid string) []Transaction {
 	rows, err := s.pool.Query(context.Background(), `SELECT t.id::text, t.amount, t.currency, t.occurred_at,
-		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, t.status
+		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, t.status, COALESCE(t.payment_source,'')
 		FROM transactions t LEFT JOIN merchants m ON m.id=t.merchant_id LEFT JOIN categories c ON c.id=t.category_id
 		WHERE t.user_id=$1 AND t.deleted_at IS NULL ORDER BY t.occurred_at DESC`, uid)
 	if err != nil {
@@ -117,7 +118,7 @@ func (s *Store) All(uid string) []Transaction {
 	for rows.Next() {
 		var t Transaction
 		var id string
-		if err := rows.Scan(&id, &t.Amount, &t.Currency, &t.OccurredAt, &t.Merchant, &t.Category, &t.Note, &t.Source, &t.Status); err == nil {
+		if err := rows.Scan(&id, &t.Amount, &t.Currency, &t.OccurredAt, &t.Merchant, &t.Category, &t.Note, &t.Source, &t.Status, &t.PaymentSource); err == nil {
 			t.ID = id
 			out = append(out, t)
 		}
@@ -212,8 +213,8 @@ func (s *Store) Update(id, note, category, uid string) (Transaction, bool) {
 		note=CASE WHEN $3::text IS NULL THEN note ELSE $3 END,
 		category_id=CASE WHEN $4::uuid IS NULL THEN category_id ELSE $4::uuid END
 		WHERE id=$1::uuid AND user_id=$2 AND deleted_at IS NULL
-		RETURNING id::text, amount, currency, occurred_at, COALESCE(note,''), source, status`,
-		id, uid, nullIfEmpty(note), catID).Scan(&tid, &t.Amount, &t.Currency, &t.OccurredAt, &t.Note, &t.Source, &t.Status)
+		RETURNING id::text, amount, currency, occurred_at, COALESCE(note,''), source, status, COALESCE(payment_source,'')`,
+		id, uid, nullIfEmpty(note), catID).Scan(&tid, &t.Amount, &t.Currency, &t.OccurredAt, &t.Note, &t.Source, &t.Status, &t.PaymentSource)
 	if err != nil {
 		return Transaction{}, false
 	}

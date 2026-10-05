@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { Panel, SectionTitle, CategoryBadge, EmptyState } from '@/features/spendly/components/primitives';
+import ConfirmDialog from '@/features/spendly/components/ConfirmDialog';
 import { uniqueCategories } from '@/features/spendly/categories';
 import {
   getTransactions, deleteTransaction, restoreTransaction, getReviewQueue, confirmReview, ignoreReview,
@@ -98,6 +99,7 @@ export default function TransaksiPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const mountedRef = useRef(true);
 
   const load = useCallback(async (query = q, category = cat, p = 1, append = false, r = range, f = from, t = to) => {
@@ -199,6 +201,17 @@ export default function TransaksiPage() {
     }
   }
 
+  // Konfirmasi dulu lewat modal agar tidak salah tekan.
+  function askDelete(t) {
+    setPendingDelete(t);
+  }
+
+  function confirmDelete() {
+    const t = pendingDelete;
+    setPendingDelete(null);
+    if (t) onDelete(t.id);
+  }
+
   async function onConfirm(t) {
     try {
       await confirmReview(t.id, t.category);
@@ -225,6 +238,7 @@ export default function TransaksiPage() {
             {t.note && <p className="truncate text-xs text-lichen">{t.note}</p>}
             <p className="truncate font-mono text-[11px] text-lichen">
               {formatDate(t.occurred_at)} · {t.category}
+              {t.payment_source ? ` · ${t.payment_source}` : ''}
               {tab === 'review' && t.confidence != null ? ` · ${Math.round(t.confidence * 100)}%` : ''}
             </p>
           </div>
@@ -251,7 +265,7 @@ export default function TransaksiPage() {
             <button type="button" onClick={() => onCorrect(t)} className="flex-1 rounded-full border border-forest-ink py-2 text-xs font-medium text-forest-ink cursor-pointer">
               Jadikan pengeluaran
             </button>
-            <button type="button" onClick={() => onDelete(t.id)} className="rounded-full border border-border px-3 py-2 text-xs text-lichen cursor-pointer">
+            <button type="button" onClick={() => askDelete(t)} className="rounded-full border border-border px-3 py-2 text-xs text-lichen cursor-pointer">
               Hapus
             </button>
           </div>
@@ -259,7 +273,7 @@ export default function TransaksiPage() {
 
         {tab === 'all' && (
           <div className="mt-1 flex justify-end">
-            <button type="button" onClick={() => onDelete(t.id)} aria-label="Hapus" className="flex h-7 w-7 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer">
+            <button type="button" onClick={() => askDelete(t)} aria-label="Hapus" className="flex h-7 w-7 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -400,6 +414,17 @@ export default function TransaksiPage() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
+        title="Hapus transaksi ini?"
+        description={pendingDelete
+          ? `${pendingDelete.merchant || pendingDelete.category || 'Transaksi'} · ${formatCurrency(pendingDelete.amount)} akan dihapus.`
+          : ''}
+        confirmLabel="Hapus"
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

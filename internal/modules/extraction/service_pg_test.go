@@ -111,4 +111,26 @@ func TestPipelineIntegration(t *testing.T) {
 	if amt != 0 || status != "needs_review" {
 		t.Fatalf("bad amount: amount=%d status=%q", amt, status)
 	}
+
+	// 6. transaksi dihapus manual → dipulihkan (id sama) saat diproses ulang
+	var tx1 string
+	_ = pool.QueryRow(ctx, `SELECT id::text FROM transactions WHERE raw_email_id=$1::uuid`, raw).Scan(&tx1)
+	if _, err := pool.Exec(ctx, `UPDATE transactions SET deleted_at=now() WHERE id=$1::uuid`, tx1); err != nil {
+		t.Fatalf("soft delete: %v", err)
+	}
+	raw6 := newRaw()
+	if err := svc.apply(ctx, raw6, uid, time.Now(), res, llm.Usage{}, false); err != nil {
+		t.Fatalf("apply restore: %v", err)
+	}
+	var gotID string
+	var deletedAt any
+	if err := pool.QueryRow(ctx, `SELECT id::text, deleted_at FROM transactions WHERE id=$1::uuid`, tx1).Scan(&gotID, &deletedAt); err != nil {
+		t.Fatalf("select restored: %v", err)
+	}
+	if deletedAt != nil {
+		t.Fatalf("transaksi tidak dipulihkan: deleted_at=%v", deletedAt)
+	}
+	if gotID != tx1 {
+		t.Fatalf("transaksi dipulihkan sebagai baris baru: %s != %s", gotID, tx1)
+	}
 }

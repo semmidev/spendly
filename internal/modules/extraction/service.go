@@ -53,11 +53,11 @@ func (s *Service) ProcessRaw(ctx context.Context, rawID string) error {
 	if !recv.IsZero() {
 		received = recv
 	}
-	_ = subject
 	redacted := mailsync.Redact(text)
 
 	// cache: hash sama pernah diekstrak → pakai ulang (PLAN §4.5)
 	if cached, ok := s.cached(ctx, userID, hash); ok {
+		s.enrich(&cached, from, text)
 		return s.apply(ctx, rawID, userID, received, cached, llm.Usage{}, true)
 	}
 
@@ -65,7 +65,7 @@ func (s *Service) ProcessRaw(ctx context.Context, rawID string) error {
 	var usage llm.Usage
 	if s.ai != nil {
 		ctxAI, cancel := context.WithTimeout(ctx, 40*time.Second)
-		r, u, err := s.ai.Extract(ctxAI, "From: "+from+"\n\n"+redacted, s.ledger.Categories(userID))
+		r, u, err := s.ai.Extract(ctxAI, "From: "+from+"\nSubject: "+subject+"\n\n"+redacted, s.ledger.Categories(userID))
 		cancel()
 		if err == nil {
 			res, usage = r, u
@@ -73,14 +73,32 @@ func (s *Service) ProcessRaw(ctx context.Context, rawID string) error {
 				"tokens_in", u.TokensIn, "tokens_out", u.TokensOut, "cost", u.Cost, "latency_ms", u.LatencyMs)
 		} else {
 			slog.Warn("AI gagal, pakai parser lokal", "raw", shortID(rawID), "error", err)
-			res = FallbackExtract(from, "", text)
+			res = FallbackExtract(from, subject, text)
 		}
 	} else {
 		slog.Debug("tanpa AI, pakai parser lokal", "raw", shortID(rawID))
-		res = FallbackExtract(from, "", text)
+		res = FallbackExtract(from, subject, text)
 	}
+	s.enrich(&res, from, text)
 	recordAI(ctx, s.pool, userID, usage)
 	return s.apply(ctx, rawID, userID, received, res, usage, false)
+}
+
+// enrich mengisi field yang sering terlewat AI secara deterministik:
+// payment_source dari pengirim/isi email, reference_no dari regex umum.
+func (s *Service) enrich(res *llm.Result, from, text string) {
+	if res.PaymentSource == nil || strings.TrimSpace(*res.PaymentSource) == "" {
+		if ps := DerivePaymentSource(from, text); ps != "" {
+			res.PaymentSource = &ps
+		}
+	}
+	if res.ReferenceNo == nil || strings.TrimSpace(*res.ReferenceNo) == "" {
+		if m := refRe.FindStringSubmatch(text); m != nil {
+			if ref := strings.Trim(m[1], ":-/. "); ref != "" {
+				res.ReferenceNo = &ref
+			}
+		}
+	}
 }
 
 func (s *Service) cached(ctx context.Context, userID, hash string) (llm.Result, bool) {

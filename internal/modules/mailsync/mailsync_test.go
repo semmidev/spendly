@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"strings"
 	"testing"
+	"time"
 
 	gmailapi "google.golang.org/api/gmail/v1"
 )
@@ -93,5 +94,18 @@ func TestSenderDomain(t *testing.T) {
 		if got := senderDomain(in); got != want {
 			t.Fatalf("%q → %q, mau %q", in, got, want)
 		}
+	}
+}
+
+func TestBuildQueryBefore(t *testing.T) {
+	after := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	got := buildQuery([]string{"bca.co.id", "gopay.co.id"}, after, time.Time{})
+	if !strings.Contains(got, "after:") || strings.Contains(got, "before:") {
+		t.Fatalf("tanpa before: %q", got)
+	}
+	before := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	got = buildQuery([]string{"bca.co.id"}, after, before)
+	if !strings.Contains(got, "from:(bca.co.id)") || !strings.Contains(got, "after:") || !strings.Contains(got, "before:") {
+		t.Fatalf("dengan before: %q", got)
 	}
 }

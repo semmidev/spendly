@@ -74,10 +74,33 @@ func (s *Store) CreateEmail(in EmailInput, uid string) (string, bool) {
 		merchID, catID, nullStr(in.Source), in.Note,
 		nullStr(in.RawEmailID), nullStr(in.ReferenceNo), nullStr(in.Fingerprint),
 		status, nullStr(in.DuplicateOf), in.Confidence).Scan(&out)
-	if err != nil || out == "" {
-		return "", false
+	if err == nil && out != "" {
+		return out, true
 	}
-	return out, true
+	// Bentrok fingerprint: bila record lama sudah dihapus manual, pulihkan dan
+	// perbarui dengan hasil ekstraksi terbaru (reprocess) alih-alih melewatkannya.
+	if in.Fingerprint != "" {
+		if rid, rerr := s.restoreDeleted(ctx, uid, in, catID, merchID, status); rerr == nil && rid != "" {
+			return rid, true
+		}
+	}
+	return "", false
+}
+
+// restoreDeleted mengaktifkan kembali transaksi (fingerprint sama) yang dihapus
+// manual, sekaligus menimpa field dengan hasil ekstraksi terbaru.
+func (s *Store) restoreDeleted(ctx context.Context, uid string, in EmailInput, catID, merchID any, status string) (string, error) {
+	var id string
+	err := s.pool.QueryRow(ctx, `UPDATE transactions SET
+		deleted_at=NULL, amount=$3, currency=$4, occurred_at=$5, merchant_id=$6, category_id=$7,
+		payment_source=$8, note=$9, source='email', raw_email_id=$10::uuid, reference_no=$11,
+		status=$12, duplicate_of=$13::uuid, confidence=$14
+		WHERE user_id=$1 AND fingerprint=$2 AND deleted_at IS NOT NULL
+		RETURNING id::text`,
+		uid, in.Fingerprint, in.Amount, in.Currency, in.OccurredAt.UTC(),
+		merchID, catID, nullStr(in.Source), in.Note, nullStr(in.RawEmailID),
+		nullStr(in.ReferenceNo), status, nullStr(in.DuplicateOf), in.Confidence).Scan(&id)
+	return id, err
 }
 
 // FindDuplicate: nominal sama + waktu ±10 mnt + merchant mirip (PLAN §5).
@@ -144,9 +167,9 @@ func (s *Store) Merge(srcID, dstID, uid string) (Transaction, bool) {
 	var t Transaction
 	var tid string
 	err = s.pool.QueryRow(ctx, `SELECT t.id::text, t.amount, t.currency, t.occurred_at,
-		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, t.status
+		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, t.status, COALESCE(t.payment_source,'')
 		FROM transactions t LEFT JOIN merchants m ON m.id=t.merchant_id LEFT JOIN categories c ON c.id=t.category_id
-		WHERE t.id=$1::uuid`, dstID).Scan(&tid, &t.Amount, &t.Currency, &t.OccurredAt, &t.Merchant, &t.Category, &t.Note, &t.Source, &t.Status)
+		WHERE t.id=$1::uuid`, dstID).Scan(&tid, &t.Amount, &t.Currency, &t.OccurredAt, &t.Merchant, &t.Category, &t.Note, &t.Source, &t.Status, &t.PaymentSource)
 	if err != nil {
 		return Transaction{}, false
 	}

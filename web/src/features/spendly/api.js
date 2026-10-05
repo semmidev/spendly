@@ -90,9 +90,14 @@ export async function putSenders(connection_id, domains) {
   return data;
 }
 
-export async function discoverSenders(connection_id) {
-  const { data } = await client.post('/senders/discover', { connection_id });
-  return data?.items || [];
+export async function addSenderRegistry(domain, label) {
+  const { data } = await client.post('/senders/registry', { domain, label });
+  return data;
+}
+
+export async function deleteSenderRegistry(id) {
+  const { data } = await client.delete(`/senders/registry/${id}`);
+  return data;
 }
 
 export async function startGmailSync(payload = {}) {
@@ -137,26 +142,5 @@ export async function updateGmailSettings(id, payload) {
 
 export async function getSyncStatus(connection_id) {
   const { data } = await client.get('/sync/status', { params: connection_id ? { connection_id } : {} });
-  return data;
-}
-
-// Berulang
-export async function getRecurring() {
-  const { data } = await client.get('/recurring');
-  return data?.items || [];
-}
-
-export async function createRecurring(payload) {
-  const { data } = await client.post('/recurring', payload);
-  return data;
-}
-
-export async function deleteRecurring(id) {
-  const { data } = await client.delete(`/recurring/${id}`);
-  return data;
-}
-
-export async function bookRecurring(id) {
-  const { data } = await client.post(`/recurring/${id}/book`);
   return data;
 }

@@ -58,8 +58,3 @@ func containsAny(s string, words []string) bool {
 	}
 	return false
 }
-
-// TxHints true bila subject terlihat seperti transaksi (untuk discover).
-func TxHints(subject string) bool {
-	return containsAny(strings.ToLower(subject), txWords)
-}

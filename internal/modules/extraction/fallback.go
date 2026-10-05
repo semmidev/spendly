@@ -32,6 +32,31 @@ var (
 		"traveloka.com": "Traveloka", "bca.co.id": "BCA", "bankmandiri.co.id": "Mandiri",
 		"bni.co.id": "BNI", "bri.co.id": "BRI", "jago.com": "Jago", "seabank.co.id": "SeaBank",
 	}
+
+	// payment_source: bank/e-wallet. Diprioritaskan dari domain pengirim.
+	sourceDomains = map[string]string{
+		"bca.co.id": "BCA", "bankmandiri.co.id": "Mandiri", "bni.co.id": "BNI",
+		"bri.co.id": "BRI", "jago.com": "Jago", "seabank.co.id": "SeaBank",
+		"gopay.co.id": "GoPay", "ovo.id": "OVO", "dana.id": "DANA",
+		"shopeepay.co.id": "ShopeePay", "jenius.com": "Jenius",
+	}
+	sourceTextOrder = []struct {
+		brand string
+		re    *regexp.Regexp
+	}{
+		{"BCA", regexp.MustCompile(`(?i)\bbca\b`)},
+		{"Mandiri", regexp.MustCompile(`(?i)\bmandiri\b`)},
+		{"BNI", regexp.MustCompile(`(?i)\bbni\b`)},
+		{"BRI", regexp.MustCompile(`(?i)\bbri\b`)},
+		{"Jago", regexp.MustCompile(`(?i)\bjago\b`)},
+		{"SeaBank", regexp.MustCompile(`(?i)\bseabank\b`)},
+		{"GoPay", regexp.MustCompile(`(?i)\bgopay\b`)},
+		{"OVO", regexp.MustCompile(`(?i)\bovo\b`)},
+		{"DANA", regexp.MustCompile(`(?i)\bdana\b`)},
+		{"ShopeePay", regexp.MustCompile(`(?i)\bshopeepay\b`)},
+		{"Jenius", regexp.MustCompile(`(?i)\bjenius\b`)},
+	}
+	maskRe = regexp.MustCompile(`\*{2,}\s?(\d{3,4})`)
 )
 
 // FallbackExtract: parser deterministik tanpa AI (hemat biaya; dipakai bila
@@ -55,6 +80,9 @@ func FallbackExtract(from, subject, text string) llm.Result {
 		r.AmountRaw = &amt
 	}
 	r.Merchant = guessMerchant(from, low)
+	if ps := DerivePaymentSource(from, joined); ps != "" {
+		r.PaymentSource = &ps
+	}
 	if m := refRe.FindStringSubmatch(joined); m != nil {
 		ref := strings.Trim(m[1], ":-/. ")
 		r.ReferenceNo = &ref
@@ -109,10 +137,7 @@ func pickAmount(joined string) int64 {
 }
 
 func guessMerchant(from, low string) string {
-	dom := ""
-	if i := strings.LastIndex(from, "@"); i >= 0 {
-		dom = strings.ToLower(strings.Trim(from[i+1:], " >\"',;)"))
-	}
+	dom := domainOf(from)
 	if m, ok := domainMerchant[dom]; ok {
 		// bila teks menyebut brand lain yang lebih spesifik, pakai itu
 		for _, cand := range []string{"Grab", "Gojek", "GoPay", "OVO", "DANA", "Shopee", "Tokopedia", "Traveloka"} {
@@ -123,6 +148,64 @@ func guessMerchant(from, low string) string {
 		return m
 	}
 	return dom
+}
+
+// domainOf: "Nama <a@bca.co.id>" → "bca.co.id".
+func domainOf(from string) string {
+	if i := strings.LastIndex(from, "@"); i >= 0 {
+		return strings.ToLower(strings.Trim(from[i+1:], " >\"',;)"))
+	}
+	return strings.ToLower(strings.TrimSpace(from))
+}
+
+// DerivePaymentSource menebak sumber pembayaran: domain bank/e-wallet pengirim
+// lebih diprioritaskan, lalu brand dari isi email, plus nomor termask / VA.
+// Mengembalikan "" bila tidak ada petunjuk (biar jadi null).
+func DerivePaymentSource(from, text string) string {
+	low := strings.ToLower(text)
+	brand := sourceDomains[domainOf(from)]
+	if brand == "" {
+		brand = sourceBrandFromText(low)
+	}
+	if brand == "" {
+		if !strings.Contains(low, "qris") {
+			return ""
+		}
+		brand = "QRIS"
+	}
+	if suffix := sourceWithMask(text, brand); suffix != "" {
+		return brand + suffix
+	}
+	if strings.Contains(low, "virtual account") {
+		return brand + " Virtual Account"
+	}
+	return brand
+}
+
+// sourceWithMask melampirkan nomor termask (mis. "****4321") hanya bila brand
+// muncul dekat nomor tersebut — hindari salah tempel antar instrumen.
+func sourceWithMask(text, brand string) string {
+	loc := maskRe.FindStringSubmatchIndex(text)
+	if loc == nil || loc[2] < 0 {
+		return ""
+	}
+	start := loc[0] - 20
+	if start < 0 {
+		start = 0
+	}
+	if !strings.Contains(strings.ToLower(text[start:loc[0]]), strings.ToLower(brand)) {
+		return ""
+	}
+	return " ****" + text[loc[2]:loc[3]]
+}
+
+func sourceBrandFromText(low string) string {
+	for _, s := range sourceTextOrder {
+		if s.re.MatchString(low) {
+			return s.brand
+		}
+	}
+	return ""
 }
 
 func guessCategory(low string) string {

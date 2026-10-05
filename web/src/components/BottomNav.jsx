@@ -23,11 +23,11 @@ export default function BottomNav({ onFab }) {
                   type="button"
                   aria-label="Tambah pengeluaran"
                   onClick={() => (onFab ? onFab() : navigate('/transaksi?add=1'))}
-                  className="flex h-12 w-12 -translate-y-5 items-center justify-center rounded-full bg-forest-ink text-white transition-transform active:translate-y-[calc(-1.25rem+1px)] cursor-pointer"
+                  className="flex h-8 w-12 items-center justify-center rounded-full bg-forest-ink text-white transition-transform active:scale-95 cursor-pointer"
                 >
-                  <Plus className="h-6 w-6" strokeWidth={2.2} />
+                  <Plus className="h-5 w-5" strokeWidth={2.2} />
                 </button>
-                <span className="text-[10px] font-medium text-lichen">{item.title}</span>
+                <span className="text-[10px] font-medium invisible" aria-hidden="true">Tambah</span>
               </div>
             );
           }

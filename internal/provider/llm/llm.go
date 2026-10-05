@@ -36,7 +36,7 @@ type Usage struct {
 	Model     string
 }
 
-const promptVersion = "v1"
+const promptVersion = "v2"
 
 // Client membungkus go-openai (OpenAI-compatible: OpenAI, OpenRouter, Zen, dll).
 // Dua mode transport:
@@ -125,6 +125,10 @@ Aturan:
 - amount_raw/merchant/occurred_at_raw: salin PERSIS seperti tercetak. Tidak jelas → null, JANGAN menebak.
 - occurred_at_raw: tanggal+waktu transaksi (bukan tanggal email bila beda).
 - category: pilih dari daftar yang diberikan; tidak yakin → null.
+- payment_source: bank/e-wallet/alat bayar yang dipakai. Utamakan yang TERCETAK di email
+  (mis. "BCA", "GoPay", "OVO", "BCA Virtual Account", "BCA ****4321"). Bila tidak tercetak,
+  pakai bank/e-wallet dari alamat pengirim (From). Tidak jelas → null, JANGAN mengarang nomor.
+- reference_no: nomor referensi/transaksi/order/VA bila tercetak. Tidak jelas → null.
 - note: deskripsi singkat pengeluaran dalam Bahasa Indonesia, jelaskan untuk apa / beli apa
   (mis. "Perjalanan Grab ke kantor", "Makan siang", "Beli pulsa", "Langganan Netflix").
   Maksimal 60 karakter. Tidak jelas → null.

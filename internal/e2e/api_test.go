@@ -214,6 +214,106 @@ func TestMailsyncAndVersion(t *testing.T) {
 	}
 }
 
+// TestSenderRegistry: tambah manual (is_seed=false), duplikat/seed ditolak,
+// hanya pembuat yang bisa menghapus.
+func TestSenderRegistry(t *testing.T) {
+	a := newAPI(t)
+	a.login()
+
+	code, body := a.do("POST", "/api/v1/senders/registry",
+		map[string]any{"domain": "ManualBank.co.id", "label": "Manual Bank"}, true)
+	if code != http.StatusCreated {
+		t.Fatalf("tambah registry = %d %s", code, body)
+	}
+	var resp struct {
+		Data struct {
+			ID     string `json:"id"`
+			Domain string `json:"domain"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil || resp.Data.ID == "" {
+		t.Fatalf("parse registry: %v %s", err, body)
+	}
+	if resp.Data.Domain != "manualbank.co.id" {
+		t.Fatalf("domain tidak dinormalisasi: %q", resp.Data.Domain)
+	}
+
+	// Domain sama milik sendiri → update label, tetap 201.
+	if code, _ := a.do("POST", "/api/v1/senders/registry",
+		map[string]any{"domain": "manualbank.co.id", "label": "Manual Bank 2"}, true); code != http.StatusCreated {
+		t.Fatalf("update registry = %d", code)
+	}
+
+	// Domain seed → ditolak.
+	if code, _ := a.do("POST", "/api/v1/senders/registry",
+		map[string]any{"domain": "bca.co.id", "label": "X"}, true); code != http.StatusConflict {
+		t.Fatalf("tambah seed domain = %d, mau 409", code)
+	}
+
+	// Seed tidak bisa dihapus.
+	var seedID string
+	if err := a.pool.QueryRow(context.Background(),
+		`SELECT id::text FROM sender_registry WHERE is_seed LIMIT 1`).Scan(&seedID); err != nil {
+		t.Fatalf("seed id: %v", err)
+	}
+	if code, _ := a.do("DELETE", "/api/v1/senders/registry/"+seedID, nil, true); code != http.StatusNotFound {
+		t.Fatalf("hapus seed = %d, mau 404", code)
+	}
+
+	// Pembuat bisa hapus, lalu 404 saat diulang.
+	if code, _ := a.do("DELETE", "/api/v1/senders/registry/"+resp.Data.ID, nil, true); code != http.StatusOK {
+		t.Fatalf("hapus manual = %d", code)
+	}
+	if code, _ := a.do("DELETE", "/api/v1/senders/registry/"+resp.Data.ID, nil, true); code != http.StatusNotFound {
+		t.Fatalf("hapus ulang = %d, mau 404", code)
+	}
+}
+
+// TestScanCustomRange: PATCH scan_window=custom dengan rentang tanggal eksplisit.
+func TestScanCustomRange(t *testing.T) {
+	a := newAPI(t)
+	a.login()
+	ctx := context.Background()
+
+	_, me := a.do("GET", "/api/v1/auth/me", nil, false)
+	var meResp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(me, &meResp); err != nil || meResp.Data.ID == "" {
+		t.Fatalf("me parse: %v %s", err, me)
+	}
+	var connID string
+	if err := a.pool.QueryRow(ctx, `INSERT INTO gmail_connections (user_id, google_email, enc_refresh_token, status)
+		VALUES ($1,'custom@gmail.com','x','active') RETURNING id::text`, meResp.Data.ID).Scan(&connID); err != nil {
+		t.Fatalf("insert conn: %v", err)
+	}
+
+	// Valid custom range → 200, tersimpan.
+	if code, body := a.do("PATCH", "/api/v1/gmail/connections/"+connID,
+		map[string]any{"scan_window": "custom", "scan_limit": 50, "scan_from": "2026-01-01", "scan_to": "2026-01-31"}, true); code != http.StatusOK {
+		t.Fatalf("patch custom = %d %s", code, body)
+	}
+	_, st := a.do("GET", "/api/v1/sync/status?connection_id="+connID, nil, false)
+	if !strings.Contains(string(st), `"scan_window":"custom"`) ||
+		!strings.Contains(string(st), `"scan_from":"2026-01-01"`) ||
+		!strings.Contains(string(st), `"scan_to":"2026-01-31"`) {
+		t.Fatalf("status custom = %s", st)
+	}
+
+	// from > to → 400.
+	if code, _ := a.do("PATCH", "/api/v1/gmail/connections/"+connID,
+		map[string]any{"scan_window": "custom", "scan_limit": 50, "scan_from": "2026-02-01", "scan_to": "2026-01-01"}, true); code != http.StatusBadRequest {
+		t.Fatalf("custom from>to = %d, mau 400", code)
+	}
+	// tanggal hilang → 400.
+	if code, _ := a.do("PATCH", "/api/v1/gmail/connections/"+connID,
+		map[string]any{"scan_window": "custom", "scan_limit": 50}, true); code != http.StatusBadRequest {
+		t.Fatalf("custom tanpa tanggal = %d, mau 400", code)
+	}
+}
+
 func TestHealth(t *testing.T) {
 	a := newAPI(t)
 	if code, _ := a.do("GET", "/health/live", nil, false); code != http.StatusOK {

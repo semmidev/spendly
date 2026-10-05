@@ -2,19 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  Mail, Trash2, LogOut, RefreshCw, Repeat, Plus, ShieldCheck, Check,
+  Mail, Trash2, LogOut, RefreshCw, Plus, ShieldCheck, Check,
   Pause, Play, Square,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatCurrency } from '@/lib/utils';
 import { Panel, SectionTitle, Chip } from '@/features/spendly/components/primitives';
+import AddSenderDrawer from '@/features/spendly/components/AddSenderDrawer';
+import ConfirmDialog from '@/features/spendly/components/ConfirmDialog';
 import { useAuthStore } from '@/features/auth/store';
 import client from '@/lib/client';
 import {
-  getGmailConnections, disconnectGmail, getSenders, putSenders, discoverSenders,
-  getSyncStatus, getRecurring, createRecurring, deleteRecurring, bookRecurring,
-  startGmailSync, getSyncJob, getActiveSyncJob, pauseSyncJob, resumeSyncJob, cancelSyncJob, syncEventsUrl, updateGmailSettings,
+  getGmailConnections, disconnectGmail, getSenders, putSenders, deleteSenderRegistry,
+  getSyncStatus, startGmailSync, getSyncJob, getActiveSyncJob, pauseSyncJob, resumeSyncJob, cancelSyncJob, syncEventsUrl, updateGmailSettings,
 } from '@/features/spendly/api';
 
 // Preset jendela scan. "Bulan ini" dihitung dari tanggal 1 bulan berjalan.
@@ -24,10 +24,12 @@ const WINDOWS = [
   { key: 'month', label: 'Bulan ini', days: null },
   { key: '30d', label: '30 hari', days: 30 },
   { key: '90d', label: '90 hari', days: 90 },
+  { key: 'custom', label: 'Rentang', days: null },
 ];
 
 function windowDays(key) {
   if (key === 'month') return new Date().getDate();
+  if (key === 'custom') return null;
   return WINDOWS.find((w) => w.key === key)?.days || 30;
 }
 
@@ -66,10 +68,10 @@ export default function AkunPage() {
   const [conns, setConns] = useState([]);
   const [senders, setSenders] = useState([]);
   const [status, setStatus] = useState(null);
-  const [recurring, setRecurring] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [newSub, setNewSub] = useState({ merchant: '', amount: '' });
-  const [scan, setScan] = useState({ window: '30d', limit: 100 });
+  const [senderOpen, setSenderOpen] = useState(false);
+  const [pendingSender, setPendingSender] = useState(null);
+  const [scan, setScan] = useState({ window: '30d', limit: 100, from: '', to: '' });
   const [job, setJob] = useState(null); // { id, progress }
   const esRef = useRef(null);
   const mountedRef = useRef(true);
@@ -88,7 +90,7 @@ export default function AkunPage() {
         ]);
         setSenders(s?.items || []);
         setStatus(st);
-        if (st?.scan_window) setScan({ window: st.scan_window, limit: st.scan_limit || 100 });
+        if (st?.scan_window) setScan({ window: st.scan_window, limit: st.scan_limit || 100, from: st.scan_from || '', to: st.scan_to || '' });
         // Pulihkan indikator progres bila ada sync yang masih berjalan.
         await restoreActiveJob(c[0].id);
       } else {
@@ -97,7 +99,6 @@ export default function AkunPage() {
         setStatus(null);
         setJob(null);
       }
-      setRecurring(await getRecurring().catch(() => []));
     } finally {
       setLoading(false);
     }
@@ -151,26 +152,41 @@ export default function AkunPage() {
     }
   }
 
-  async function onDiscover() {
-    setBusy('disc');
+  async function onDeleteSender() {
+    const s = pendingSender;
+    setPendingSender(null);
+    if (!s) return;
+    setBusy(`del:${s.id}`);
     try {
-      const items = await discoverSenders(connId);
-      const tx = items.filter((i) => i.suggested);
-      toast.success(`Ditemukan ${items.length} pengirim, ${tx.length} terlihat transaksional`);
-      if (tx.length > 0) {
-        await putSenders(connId, [...new Set([...senders.filter((s) => s.allowed).map((s) => s.domain), ...tx.map((t) => t.domain)])]);
-        load();
-      }
-    } catch (e) { toast.error(e?.response?.data?.message || 'Gagal menemukan pengirim'); }
+      await deleteSenderRegistry(s.id);
+      toast.success('Pengirim dihapus');
+      load();
+    } catch (e) { toast.error(e?.response?.data?.message || 'Gagal menghapus pengirim'); }
     finally { setBusy(''); }
   }
 
   async function saveScan(next) {
     setScan(next);
     try {
-      await updateGmailSettings(connId, { scan_window: next.window, scan_limit: next.limit });
+      await updateGmailSettings(connId, {
+        scan_window: next.window,
+        scan_limit: Number(next.limit) || 100,
+        scan_from: next.from || '',
+        scan_to: next.to || '',
+      });
       toast.success('Pengaturan scan disimpan');
     } catch (e) { toast.error(e?.response?.data?.message || 'Gagal menyimpan'); }
+  }
+
+  function applyCustomRange() {
+    if (!scan.from || !scan.to) { toast.error('Isi tanggal dari dan sampai'); return; }
+    if (scan.from > scan.to) { toast.error('Tanggal akhir harus setelah tanggal awal'); return; }
+    saveScan({ ...scan, window: 'custom' });
+  }
+
+  function commitLimit() {
+    const v = Math.min(1000, Math.max(1, Number(scan.limit) || 100));
+    saveScan({ ...scan, limit: v });
   }
 
   function subscribe(jobId) {
@@ -256,13 +272,14 @@ export default function AkunPage() {
 
   async function runSync(force) {
     try {
+      const maxEmails = Number(scan.limit) || 0;
       const { job_id } = await startGmailSync({
         connection_id: connId,
-        max_emails: scan.limit,
-        ...(force ? { backfill_days: windowDays(scan.window) } : {}),
+        max_emails: maxEmails,
+        ...(force && scan.window !== 'custom' ? { backfill_days: windowDays(scan.window) } : {}),
       });
       saveStoredJob(connId, job_id);
-      setJob({ id: job_id, progress: { status: 'running', message: 'menyiapkan', processed: 0, total: scan.limit } });
+      setJob({ id: job_id, progress: { status: 'running', message: 'menyiapkan', processed: 0, total: maxEmails } });
       subscribe(job_id);
     } catch (e) { toast.error(e?.response?.data?.message || 'Gagal memulai sinkronisasi'); }
   }
@@ -290,21 +307,6 @@ export default function AkunPage() {
   async function onLogout() {
     await logout();
     navigate('/login', { replace: true });
-  }
-
-  async function addRecurring(e) {
-    e.preventDefault();
-    const amount = Number(String(newSub.amount).replace(/[^0-9]/g, ''));
-    if (!newSub.merchant || !amount) {
-      toast.error('Isi nama dan nominal');
-      return;
-    }
-    try {
-      await createRecurring({ merchant: newSub.merchant, amount, category: 'Tagihan', cadence: 'monthly' });
-      setNewSub({ merchant: '', amount: '' });
-      toast.success('Langganan ditambahkan');
-      load();
-    } catch { toast.error('Gagal menambah'); }
   }
 
   const initial = (user?.name || user?.email || 'S')[0].toUpperCase();
@@ -394,22 +396,58 @@ export default function AkunPage() {
                   <p className="mb-1.5 text-[11px] font-medium text-lichen">Jendela email</p>
                   <div className="flex flex-wrap gap-2">
                     {WINDOWS.map((w) => (
-                      <Chip key={w.key} active={scan.window === w.key} onClick={() => saveScan({ ...scan, window: w.key })}>
+                      <Chip
+                        key={w.key}
+                        active={scan.window === w.key}
+                        onClick={() => (w.key === 'custom' ? setScan({ ...scan, window: 'custom' }) : saveScan({ ...scan, window: w.key }))}
+                      >
                         {w.label}
                       </Chip>
                     ))}
                   </div>
                 </div>
+
+                {scan.window === 'custom' && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-medium text-lichen">Rentang tanggal</p>
+                    <div className="flex items-center gap-2">
+                      <Input type="date" value={scan.from} onValueChange={(v) => setScan({ ...scan, from: v })} aria-label="Dari tanggal" className="h-10 flex-1" />
+                      <span className="text-xs text-lichen">s/d</span>
+                      <Input type="date" value={scan.to} onValueChange={(v) => setScan({ ...scan, to: v })} aria-label="Sampai tanggal" className="h-10 flex-1" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={applyCustomRange}
+                      className="h-10 w-full rounded-full border border-forest-ink bg-forest-ink text-xs font-medium text-white cursor-pointer"
+                    >
+                      Terapkan rentang
+                    </button>
+                  </div>
+                )}
+
                 <div>
                   <p className="mb-1.5 text-[11px] font-medium text-lichen">Maksimal email per sinkronisasi</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {[25, 50, 100, 200].map((l) => (
-                      <Chip key={l} active={scan.limit === l} onClick={() => saveScan({ ...scan, limit: l })}>{l} email</Chip>
+                      <Chip key={l} active={Number(scan.limit) === l} onClick={() => saveScan({ ...scan, limit: l })}>{l}</Chip>
                     ))}
+                    <Input
+                      value={String(scan.limit ?? '')}
+                      onValueChange={(v) => setScan({ ...scan, limit: v.replace(/[^0-9]/g, '') })}
+                      onBlur={commitLimit}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                      inputMode="numeric"
+                      aria-label="Maksimal email"
+                      className="tnum h-9 w-20 text-center font-mono text-xs"
+                    />
+                    <span className="text-[11px] text-lichen">email (1–1000)</span>
                   </div>
                 </div>
                 <p className="text-[11px] leading-relaxed text-lichen">
-                  Hanya email dari pengirim terpilih, {windowDays(scan.window)} hari terakhir, maksimal {scan.limit} email per sinkronisasi. Sync hanya jalan saat kamu klik.
+                  {scan.window === 'custom'
+                    ? `Scan email dalam rentang ${scan.from || '…'} s/d ${scan.to || '…'}, maksimal ${scan.limit || 100} email.`
+                    : `Hanya email dari pengirim terpilih, ${windowDays(scan.window)} hari terakhir, maksimal ${scan.limit || 100} email per sinkronisasi.`}
+                  {' '}Sync hanya jalan saat kamu klik.
                 </p>
               </div>
 
@@ -472,11 +510,10 @@ export default function AkunPage() {
 
               <button
                 type="button"
-                onClick={onDiscover}
-                disabled={busy === 'disc' || !!jobActive}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-sm border border-border bg-card text-xs font-medium text-lichen transition-colors hover:bg-mint disabled:opacity-60 cursor-pointer"
+                onClick={() => setSenderOpen(true)}
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-sm border border-border bg-card text-xs font-medium text-lichen transition-colors hover:bg-mint cursor-pointer"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${busy === 'disc' ? 'animate-spin' : ''}`} /> Temukan pengirim
+                <Plus className="h-3.5 w-3.5" /> Tambah pengirim
               </button>
 
               {senders.length > 0 && (
@@ -486,65 +523,40 @@ export default function AkunPage() {
                   </p>
                   <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
                     {senders.map((s) => (
-                      <button
-                        key={s.domain}
-                        type="button"
-                        onClick={() => toggleSender(s.domain, s.allowed)}
-                        className="flex w-full items-center gap-3 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-mint cursor-pointer"
-                      >
-                        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border ${
-                          s.allowed ? 'border-forest-ink bg-forest-ink text-white' : 'border-border text-transparent'
-                        }`}>
-                          <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-medium text-forest-ink">{s.label || s.domain}</span>
-                          <span className="block truncate font-mono text-[11px] text-lichen">{s.domain}</span>
-                        </span>
-                      </button>
+                      <div key={s.domain} className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleSender(s.domain, s.allowed)}
+                          className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-mint cursor-pointer"
+                        >
+                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border ${
+                            s.allowed ? 'border-forest-ink bg-forest-ink text-white' : 'border-border text-transparent'
+                          }`}>
+                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-medium text-forest-ink">{s.label || s.domain}</span>
+                            <span className="block truncate font-mono text-[11px] text-lichen">{s.domain}</span>
+                          </span>
+                        </button>
+                        {s.can_delete && (
+                          <button
+                            type="button"
+                            onClick={() => setPendingSender(s)}
+                            disabled={busy === `del:${s.id}`}
+                            aria-label="Hapus pengirim"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
             </div>
           )}
-        </Panel>
-      </div>
-
-      {/* Langganan */}
-      <div>
-        <SectionTitle>Langganan & cicilan</SectionTitle>
-        <Panel className="p-4">
-          {recurring.length > 0 && (
-            <div className="mb-3 space-y-2">
-              {recurring.map((r) => (
-                <div key={r.id} className="flex items-center gap-3 rounded-md border border-border bg-mint/50 px-3.5 py-3">
-                  <Repeat className="h-4 w-4 shrink-0 text-lichen" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-forest-ink">{r.merchant}</p>
-                    <p className="tnum font-mono text-[11px] text-lichen">{formatCurrency(r.amount)} · bulanan</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => bookRecurring(r.id).then(() => { toast.success('Tercatat'); window.dispatchEvent(new CustomEvent('spendly:refresh')); })}
-                    className="shrink-0 text-xs font-medium text-deep-forest cursor-pointer"
-                  >
-                    Catat
-                  </button>
-                  <button type="button" onClick={() => deleteRecurring(r.id).then(load)} className="shrink-0 text-xs text-lichen cursor-pointer">
-                    Hapus
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <form onSubmit={addRecurring} className="flex gap-2">
-            <Input value={newSub.merchant} onValueChange={(v) => setNewSub({ ...newSub, merchant: v })} placeholder="Netflix, Spotify…" aria-label="Nama langganan" className="h-10 flex-1" />
-            <Input value={newSub.amount} onValueChange={(v) => setNewSub({ ...newSub, amount: v })} inputMode="numeric" placeholder="Rp" aria-label="Nominal" className="tnum h-10 w-24 font-mono" />
-            <button type="submit" aria-label="Tambah" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-forest-ink bg-forest-ink text-white cursor-pointer">
-              <Plus className="h-4 w-4" />
-            </button>
-          </form>
         </Panel>
       </div>
 
@@ -573,6 +585,17 @@ export default function AkunPage() {
       <p className="px-4 text-center font-mono text-[11px] leading-relaxed text-lichen">
         Spendly hanya membaca email dari pengirim yang kamu izinkan. Isi email tidak disimpan.
       </p>
+
+      <AddSenderDrawer open={senderOpen} onOpenChange={setSenderOpen} onAdded={load} />
+
+      <ConfirmDialog
+        open={!!pendingSender}
+        onOpenChange={(open) => { if (!open) setPendingSender(null); }}
+        title="Hapus pengirim ini?"
+        description={pendingSender ? `${pendingSender.label || pendingSender.domain} akan dihapus dari daftar.` : ''}
+        confirmLabel="Hapus"
+        onConfirm={onDeleteSender}
+      />
     </div>
   );
 }

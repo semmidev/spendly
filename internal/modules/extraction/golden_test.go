@@ -16,28 +16,29 @@ type goldenCase struct {
 	wantExpense  bool
 	wantAmount   int64 // 0 = abaikan
 	wantMerchant string
+	wantSource   string // payment_source; "" = abaikan
 }
 
 var golden = []goldenCase{
 	{
 		name: "gopay grab", from: "noreply@gopay.co.id", subj: "Pembayaran berhasil",
 		text:     "Kamu membayar Rp 27.500 ke GRAB*TRIP. Saldo GoPay Rp 100.000. Ref TRX/ABC/123",
-		wantGate: true, wantExpense: true, wantAmount: 27500, wantMerchant: "Grab",
+		wantGate: true, wantExpense: true, wantAmount: 27500, wantMerchant: "Grab", wantSource: "GoPay",
 	},
 	{
 		name: "bca transfer", from: "noreply@bca.co.id", subj: "Transfer berhasil",
 		text:     "Transfer Rp1.250.000 ke BCA ****4321 pada 03 Okt 2026 14:22 WIB. No ref 998877",
-		wantGate: true, wantExpense: true, wantAmount: 1250000,
+		wantGate: true, wantExpense: true, wantAmount: 1250000, wantSource: "BCA ****4321",
 	},
 	{
 		name: "tokopedia", from: "noreply@tokopedia.com", subj: "Pesanan dibayar",
 		text:     "Pesanan INV/2026/X/99 senilai Rp 349.000,00 lunas via BCA Virtual Account.",
-		wantGate: true, wantExpense: true, wantAmount: 349000, wantMerchant: "Tokopedia",
+		wantGate: true, wantExpense: true, wantAmount: 349000, wantMerchant: "Tokopedia", wantSource: "BCA Virtual Account",
 	},
 	{
 		name: "topup", from: "noreply@gopay.co.id", subj: "Top up berhasil",
 		text:     "Isi saldo GoPay Rp 200.000 dari BCA ****1234 berhasil.",
-		wantGate: true, wantExpense: false,
+		wantGate: true, wantExpense: false, wantSource: "GoPay",
 	},
 	{
 		name: "otp", from: "noreply@bca.co.id", subj: "Kode OTP Anda",
@@ -77,6 +78,31 @@ func TestGoldenFallback(t *testing.T) {
 		}
 		if g.wantMerchant != "" && r.Merchant != g.wantMerchant {
 			t.Fatalf("%s: merchant=%q mau %q", g.name, r.Merchant, g.wantMerchant)
+		}
+		if g.wantSource != "" {
+			got := ""
+			if r.PaymentSource != nil {
+				got = *r.PaymentSource
+			}
+			if got != g.wantSource {
+				t.Fatalf("%s: payment_source=%q mau %q", g.name, got, g.wantSource)
+			}
+		}
+	}
+}
+
+func TestDerivePaymentSource(t *testing.T) {
+	cases := []struct{ name, from, text, want string }{
+		{"domain bank", "noreply@bca.co.id", "Pembayaran berhasil", "BCA"},
+		{"domain ewallet", "noreply@gopay.co.id", "Kamu membayar Rp 10.000", "GoPay"},
+		{"mask dekat brand", "noreply@bca.co.id", "Transfer ke BCA ****4321 berhasil", "BCA ****4321"},
+		{"va di body", "noreply@tokopedia.com", "lunas via BCA Virtual Account", "BCA Virtual Account"},
+		{"qris tanpa brand", "no-reply@qris.example.com", "Pembayaran QRIS Rp 18.000", "QRIS"},
+		{"tanpa petunjuk", "no-reply@example.com", "Pembayaran berhasil Rp 5.000", ""},
+	}
+	for _, c := range cases {
+		if got := DerivePaymentSource(c.from, c.text); got != c.want {
+			t.Fatalf("%s: got %q mau %q", c.name, got, c.want)
 		}
 	}
 }
