@@ -1,0 +1,9 @@
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      run: gofmt -w {staged_files}
+    golangci-lint:
+      run: make lint
+    test:
+      run: make test

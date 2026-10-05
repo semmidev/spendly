@@ -1,0 +1,377 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Search, Trash2, ReceiptText, Sparkles, Inbox, RotateCcw, CalendarDays } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { formatCurrency, formatDate } from '@/lib/utils';
+import { Panel, SectionTitle, Chip, CategoryBadge, EmptyState } from '@/features/spendly/components/primitives';
+import { uniqueCategories } from '@/features/spendly/categories';
+import {
+  getTransactions, deleteTransaction, restoreTransaction, getReviewQueue, confirmReview, ignoreReview,
+  getIgnored, correctIgnored, reprocessEmail, getCategories,
+} from '@/features/spendly/api';
+
+const TABS = [
+  { id: 'all', title: 'Semua' },
+  { id: 'review', title: 'Tinjau' },
+  { id: 'ignored', title: 'Diabaikan' },
+];
+
+const RANGES = [
+  { key: 'all', label: 'Semua' },
+  { key: 'today', label: 'Hari ini' },
+  { key: '7d', label: '7 hari' },
+  { key: 'month', label: 'Bulan ini' },
+  { key: 'custom', label: 'Rentang' },
+];
+
+const GROUPS = [
+  { key: 'day', label: 'Per hari' },
+  { key: 'month', label: 'Per bulan' },
+];
+
+function toISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function rangeParams(range, from, to) {
+  const now = new Date();
+  if (range === 'today') { const d = toISO(now); return { from: d, to: d }; }
+  if (range === '7d') { const s = new Date(now); s.setDate(s.getDate() - 6); return { from: toISO(s), to: toISO(now) }; }
+  if (range === 'month') { const s = new Date(now.getFullYear(), now.getMonth(), 1); return { from: toISO(s), to: toISO(now) }; }
+  if (range === 'custom') return { from: from || undefined, to: to || undefined };
+  return {};
+}
+
+function groupItems(items, group) {
+  const map = new Map();
+  for (const t of items) {
+    const d = new Date(t.occurred_at);
+    if (Number.isNaN(d.getTime())) continue;
+    const key = group === 'month' ? `${d.getFullYear()}-${d.getMonth()}` : toISO(d);
+    const label = group === 'month'
+      ? d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+      : d.toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' });
+    if (!map.has(key)) map.set(key, { key, label, total: 0, items: [] });
+    const g = map.get(key);
+    g.items.push(t);
+    g.total += t.amount;
+  }
+  return [...map.values()];
+}
+
+export default function TransaksiPage() {
+  const { openQuickAdd } = useOutletContext() || {};
+  const [params, setParams] = useSearchParams();
+  const [tab, setTab] = useState(params.get('tab') || 'all');
+  const [items, setItems] = useState([]);
+  const [ignoredEmails, setIgnoredEmails] = useState([]);
+  const [cats, setCats] = useState([]);
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState('');
+  const [range, setRange] = useState('all');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [group, setGroup] = useState('day');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async (query = q, category = cat, p = 1, append = false, r = range, f = from, t = to) => {
+    setLoading(true);
+    try {
+      if (tab === 'review') {
+        setItems(await getReviewQueue());
+        setTotal(0);
+      } else if (tab === 'ignored') {
+        const d = await getIgnored();
+        setItems(d.transactions || []);
+        setIgnoredEmails(d.emails || []);
+      } else {
+        const rp = rangeParams(r, f, t);
+        const d = await getTransactions({
+          ...(query ? { q: query } : {}),
+          ...(category ? { category } : {}),
+          ...(rp.from ? { from: rp.from } : {}),
+          ...(rp.to ? { to: rp.to } : {}),
+          page: p, limit: 20,
+        });
+        const list = d?.items || [];
+        setItems((prev) => (append ? [...prev, ...list] : list));
+        setTotal(d?.meta?.total ?? list.length);
+        setPage(p);
+      }
+    } catch {
+      if (!append) setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [tab, q, cat, range, from, to]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage(1); load(q, cat, 1); }, [tab]);
+  useEffect(() => {
+    getCategories().then((d) => setCats(uniqueCategories(d?.items || []))).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (params.get('add') === '1' && openQuickAdd) {
+      openQuickAdd();
+      setParams({}, { replace: true });
+    }
+    if (params.get('tab')) {
+      setTab(params.get('tab'));
+      setParams({}, { replace: true });
+    }
+  }, [params, openQuickAdd, setParams]);
+  useEffect(() => {
+    const h = () => load(q, cat, 1);
+    window.addEventListener('spendly:refresh', h);
+    return () => window.removeEventListener('spendly:refresh', h);
+  }, [load, q, cat]);
+
+  const grouped = useMemo(() => groupItems(items, group), [items, group]);
+
+  function pickRange(r) {
+    setRange(r);
+    if (r !== 'custom') load(q, cat, 1, false, r, from, to);
+  }
+
+  async function onDelete(id) {
+    const prev = items;
+    setItems((p) => p.filter((t) => t.id !== id));
+    try {
+      await deleteTransaction(id);
+      toast.success('Dihapus', {
+        action: {
+          label: 'Urungkan',
+          onClick: async () => {
+            try {
+              await restoreTransaction(id);
+              toast.success('Dikembalikan');
+              load(q, cat, 1);
+            } catch { toast.error('Gagal mengurungkan'); }
+          },
+        },
+      });
+    } catch {
+      setItems(prev);
+      toast.error('Gagal menghapus');
+    }
+  }
+
+  async function onConfirm(t) {
+    try {
+      await confirmReview(t.id, t.category);
+      toast.success('Dikonfirmasi');
+      load(q, cat, 1);
+    } catch (e) { toast.error(e?.response?.data?.message || 'Gagal'); }
+  }
+
+  async function onCorrect(t) {
+    try {
+      await correctIgnored(t.id, t.category);
+      toast.success('Koreksi disimpan');
+      load(q, cat, 1);
+    } catch (e) { toast.error(e?.response?.data?.message || 'Gagal'); }
+  }
+
+  function renderRow(t) {
+    return (
+      <div key={t.id} className="px-4 py-3">
+        <div className="flex items-center gap-3">
+          <CategoryBadge name={t.category} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-forest-ink">{t.merchant || t.category || 'Pengeluaran'}</p>
+            {t.note && <p className="truncate text-xs text-lichen">{t.note}</p>}
+            <p className="truncate font-mono text-[11px] text-lichen">
+              {formatDate(t.occurred_at)} · {t.category}
+              {tab === 'review' && t.confidence != null ? ` · ${Math.round(t.confidence * 100)}%` : ''}
+            </p>
+          </div>
+          <p className="tnum shrink-0 font-mono text-sm font-medium text-forest-ink">{formatCurrency(t.amount)}</p>
+        </div>
+
+        {tab === 'review' && (
+          <div className="mt-2.5 flex gap-2 pl-[52px]">
+            <button type="button" onClick={() => onConfirm(t)} className="flex-1 rounded-full border border-forest-ink bg-forest-ink py-2 text-xs font-medium text-white cursor-pointer">
+              Benar
+            </button>
+            <button
+              type="button"
+              onClick={() => ignoreReview(t.id).then(() => { toast.success('Diabaikan'); load(q, cat, 1); })}
+              className="flex-1 rounded-full border border-border py-2 text-xs font-medium text-lichen cursor-pointer"
+            >
+              Bukan pengeluaran
+            </button>
+          </div>
+        )}
+
+        {tab === 'ignored' && (
+          <div className="mt-2.5 flex gap-2 pl-[52px]">
+            <button type="button" onClick={() => onCorrect(t)} className="flex-1 rounded-full border border-forest-ink py-2 text-xs font-medium text-forest-ink cursor-pointer">
+              Jadikan pengeluaran
+            </button>
+            <button type="button" onClick={() => onDelete(t.id)} className="rounded-full border border-border px-3 py-2 text-xs text-lichen cursor-pointer">
+              Hapus
+            </button>
+          </div>
+        )}
+
+        {tab === 'all' && (
+          <div className="mt-1 flex justify-end">
+            <button type="button" onClick={() => onDelete(t.id)} aria-label="Hapus" className="flex h-7 w-7 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer">
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h1 className="font-heading text-[22px] leading-tight font-medium tracking-tight text-forest-ink">Transaksi</h1>
+
+      {/* Tabs */}
+      <div className="flex border-b border-border">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`-mb-px flex-1 border-b-2 py-2.5 text-xs font-medium transition-colors cursor-pointer ${
+              tab === t.id ? 'border-forest-ink text-forest-ink' : 'border-transparent text-lichen'
+            }`}
+          >
+            {t.title}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'all' && (
+        <>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lichen" />
+            <Input
+              placeholder="Cari merchant, catatan, atau kategori…"
+              value={q}
+              onValueChange={setQ}
+              onKeyDown={(e) => { if (e.key === 'Enter') load(q, cat, 1); }}
+              className="h-11 pl-10"
+              aria-label="Cari transaksi"
+            />
+          </div>
+
+          {/* Filter tanggal */}
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4">
+            {RANGES.map((r) => (
+              <Chip key={r.key} active={range === r.key} onClick={() => pickRange(r.key)}>{r.label}</Chip>
+            ))}
+          </div>
+          {range === 'custom' && (
+            <div className="flex items-center gap-2">
+              <Input type="date" value={from} onValueChange={setFrom} aria-label="Dari tanggal" className="h-10 flex-1" />
+              <span className="text-xs text-lichen">s/d</span>
+              <Input type="date" value={to} onValueChange={setTo} aria-label="Sampai tanggal" className="h-10 flex-1" />
+              <button type="button" onClick={() => load(q, cat, 1, false, 'custom', from, to)} className="h-10 shrink-0 rounded-full border border-forest-ink bg-forest-ink px-3 text-xs font-medium text-white cursor-pointer">
+                Terapkan
+              </button>
+            </div>
+          )}
+
+          {/* Filter kategori */}
+          {cats.length > 0 && (
+            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+              <Chip active={cat === ''} onClick={() => { setCat(''); load(q, '', 1); }}>Semua</Chip>
+              {cats.map((c) => (
+                <Chip key={c} active={cat === c} onClick={() => { setCat(c); load(q, c, 1); }}>{c}</Chip>
+              ))}
+            </div>
+          )}
+
+          {/* Grouping */}
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 font-mono text-[11px] text-lichen"><CalendarDays className="h-3.5 w-3.5" /> Kelompok</span>
+            <div className="flex gap-2">
+              {GROUPS.map((g) => (
+                <Chip key={g.key} active={group === g.key} onClick={() => setGroup(g.key)}>{g.label}</Chip>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {loading && items.length === 0 ? (
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[68px] w-full rounded-lg" />)}
+        </div>
+      ) : items.length === 0 && ignoredEmails.length === 0 ? (
+        <EmptyState
+          icon={tab === 'review' ? Sparkles : tab === 'ignored' ? Inbox : ReceiptText}
+          title={tab === 'all' ? 'Belum ada transaksi' : tab === 'review' ? 'Tidak ada yang perlu ditinjau' : 'Belum ada yang diabaikan'}
+          description={
+            tab === 'all'
+              ? 'Catat pengeluaran manual atau hubungkan Gmail agar tercatat otomatis.'
+              : tab === 'review'
+                ? 'Semua hasil ekstraksi sudah jelas.'
+                : 'Email yang dianggap bukan pengeluaran akan muncul di sini.'
+          }
+          action={tab === 'all' && (
+            <button type="button" onClick={openQuickAdd} className="mt-1 rounded-full border border-forest-ink bg-forest-ink px-4 py-2 text-xs font-medium text-white cursor-pointer">
+              Catat sekarang
+            </button>
+          )}
+        />
+      ) : (
+        <>
+          {tab === 'all' ? (
+            <div className="space-y-4">
+              {grouped.map((g) => (
+                <div key={g.key}>
+                  <div className="mb-1.5 flex items-baseline justify-between px-0.5">
+                    <span className="eyebrow">{g.label}</span>
+                    <span className="tnum font-mono text-[11px] font-medium text-lichen">{formatCurrency(g.total)}</span>
+                  </div>
+                  <Panel className="divide-y divide-border">{g.items.map(renderRow)}</Panel>
+                </div>
+              ))}
+            </div>
+          ) : (
+            items.length > 0 && <Panel className="divide-y divide-border">{items.map(renderRow)}</Panel>
+          )}
+
+          {tab === 'all' && items.length < total && (
+            <button
+              type="button"
+              onClick={() => load(q, cat, page + 1, true)}
+              className="w-full rounded-full border border-border py-3 text-xs font-medium text-lichen cursor-pointer"
+            >
+              Muat lagi ({items.length}/{total})
+            </button>
+          )}
+
+          {tab === 'ignored' && ignoredEmails.length > 0 && (
+            <div className="pt-1">
+              <SectionTitle>Email diabaikan</SectionTitle>
+              <Panel className="divide-y divide-border">
+                {ignoredEmails.map((e) => (
+                  <div key={e.id} className="flex items-center gap-3 px-4 py-3">
+                    <span className="min-w-0 flex-1 truncate text-xs text-lichen">{e.reason || 'bukan pengeluaran'}</span>
+                    <button
+                      type="button"
+                      onClick={() => reprocessEmail(e.id).then(() => { toast.success('Dijadwalkan ulang'); load(q, cat, 1); })}
+                      className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-deep-forest cursor-pointer"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Proses ulang
+                    </button>
+                  </div>
+                ))}
+              </Panel>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,64 @@
+# ─── Go ───────────────────────────────────────────────────────────────────────
+bin/
+vendor/
+coverage.out
+*.out
+*.test
+*.prof
+
+# ─── Environment & Secrets ────────────────────────────────────────────────────
+.env
+.env.*
+*.env
+!.env.example
+!app.env.example
+*.pem
+*.key
+*.crt
+server/db/pgbouncer/userlist.txt
+!server/db/pgbouncer/userlist.txt.example
+
+# ─── References & Local Docs ──────────────────────────────────────────────────
+references/
+
+# ─── Infrastructure & Databases ───────────────────────────────────────────────
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfvars
+*.tfplan
+
+# Ansible
+.ansible/
+*.retry
+infra/ansible/inventory
+
+# ─── Logs & Temporary Files ───────────────────────────────────────────────────
+*.log
+tmp/
+/tmp/
+.task/
+
+# ─── OS & IDE ─────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# IDE Configs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# AI / Agents Working Dirs
+.gemini/
+
+# Frontend Embed Dist
+internal/web/dist/*
+!internal/web/dist/.gitkeep
+playground.http

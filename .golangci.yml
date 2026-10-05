@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://json.schemastore.org/golangci-lint.json
+version: "2"
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+linters:
+  default: none
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - gosec
+    - gocyclo
+    - gocognit
+    - misspell
+    - unconvert
+    - unparam
+    - prealloc
+    - bodyclose
+    - exhaustive
+    - nilerr
+    - depguard
+
+  # Konfigurasi aturan pengecualian (exclusions) untuk v2
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - gosec
+          - gocognit
+          - exhaustive
+      - path: server/db/sqlc
+        linters:
+          - errcheck
+          - gosec
+          - gocyclo
+          - gocognit
+      - path: server/docs
+        linters:
+          - errcheck
+          - gosec
+          - misspell
+      - path: web/
+        linters:
+          - gocognit
+          - gocyclo
+          - errcheck
+          - gosec
+          - staticcheck
+          - govet
+          - misspell
+          - unconvert
+          - unparam
+          - prealloc
+          - bodyclose
+          - exhaustive
+          - nilerr
+          - depguard
+
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - (net/http.ResponseWriter).Write
+        - (*github.com/jackc/pgx/v5.Tx).Rollback
+    gocyclo:
+      min-complexity: 30
+    gocognit:
+      min-complexity: 60
+    gosec:
+      excludes:
+        - G115
+    exhaustive:
+      default-signifies-exhaustive: true
+    depguard:
+      rules:
+        domain:
+          files:
+            - "**/internal/*/domain.go"
+            - "**/internal/*/dto.go"
+          deny:
+            - pkg: "github.com/jackc/pgx"
+              desc: "domain models and DTOs must not import pgx; database calls belong in SQLC store"
+            - pkg: "net/http"
+              desc: "domain models and DTOs must not import net/http; HTTP handling belongs in http.go"
+            - pkg: "github.com/go-chi/chi"
+              desc: "domain models and DTOs must not import chi"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

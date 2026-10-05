@@ -1,0 +1,13 @@
+.git
+.github
+bin
+tmp
+references
+skills
+web/node_modules
+web/dist
+internal/web/dist
+.env
+.env.*
+*.log
+.DS_Store

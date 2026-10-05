@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: spendly
+      POSTGRES_PASSWORD: spendly
+      POSTGRES_DB: spendly
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spendly"]
+      interval: 5s
+      retries: 10
+  api:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: [.env]
+    environment:
+      APP_PORT: "8080"
+      DATABASE_URL: "postgres://spendly:spendly@postgres:5432/spendly?sslmode=disable"
+    ports: ["8080:8080"]
+volumes:
+  pgdata:

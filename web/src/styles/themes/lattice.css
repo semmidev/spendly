@@ -1,0 +1,73 @@
+/* Lattice — jurnal lapangan botanis di atas perkamen hangat.
+   Sumber: web/DESIGN.md */
+[data-theme='lattice'] {
+  /* Palet mentah */
+  --parchment: #f7f6f2;
+  --paper-white: #ffffff;
+  --forest-ink: #001f1f;
+  --lichen-gray: #5c7070;
+  --stone: #6a7878;
+  --slate: #455252;
+  --mist: #889494;
+  --meadow: #cdface;
+  --deep-forest: #2a4e1c;
+  --deep-teal: #003d3d;
+  --olive: #515c0b;
+  --plum: #7a2251;
+  --saffron: #a36a14;
+  --iris: #652ea3;
+  --mint-surface: #e4f7f9;
+  --lime-surface: #f8fbe7;
+  --lavender-surface: #e1e1fa;
+  --blush-surface: #fcf2fe;
+  --buttercream: #fff3c2;
+  --sage-glow: #eff5ce;
+  --petal: #fde5ff;
+  --lilac-stroke: #dcc2eb;
+
+  /* Token aplikasi */
+  --background: var(--parchment);
+  --foreground: var(--forest-ink);
+  --card: var(--paper-white);
+  --card-foreground: var(--forest-ink);
+  --popover: var(--paper-white);
+  --popover-foreground: var(--forest-ink);
+
+  --primary: var(--forest-ink);
+  --primary-foreground: #ffffff;
+  --secondary: var(--meadow);
+  --secondary-foreground: var(--forest-ink);
+  --muted: #edefe9;
+  --muted-foreground: var(--lichen-gray);
+  --accent: var(--deep-forest);
+  --accent-foreground: #ffffff;
+  --destructive: #9c2b2e;
+  --destructive-foreground: #ffffff;
+
+  --border: #e4e1d3;
+  --input: #d8d4c2;
+  --ring: var(--forest-ink);
+
+  --chart-1: var(--deep-forest);
+  --chart-2: var(--deep-teal);
+  --chart-3: var(--olive);
+  --chart-4: var(--plum);
+  --chart-5: var(--saffron);
+  --chart-6: var(--iris);
+
+  --sidebar: var(--parchment);
+  --sidebar-foreground: var(--forest-ink);
+  --sidebar-primary: var(--forest-ink);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--meadow);
+  --sidebar-accent-foreground: var(--forest-ink);
+  --sidebar-border: #e4e1d3;
+  --sidebar-ring: var(--forest-ink);
+
+  --radius: 14px;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-md: color(srgb 0 0.121569 0.121569 / 0.04) 0px 12px 12px -6px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 6px 6px -3px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 3px 3px -1.5px, color(srgb 0 0.121569 0.121569 / 0.08) 0px 1px 1px -0.5px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 0px 0px 1px;
+}

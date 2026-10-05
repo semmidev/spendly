@@ -1,0 +1,14 @@
+/* Tema default Spendly — Lattice (botanical field journal) */
+@import './themes/lattice.css';
+
+body {
+  @apply overscroll-none;
+}
+
+:root {
+  --header-height: calc(var(--spacing, 0.25rem) * 14 + 1px);
+}
+
+[data-theme] body {
+  font-family: var(--font-sans);
+}

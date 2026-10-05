@@ -1,0 +1,174 @@
+@import '@fontsource-variable/inter';
+@import 'tailwindcss';
+
+@plugin "@tailwindcss/typography";
+
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+@import './theme.css';
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Lattice palette */
+  --color-parchment: var(--parchment);
+  --color-paper-white: var(--paper-white);
+  --color-forest-ink: var(--forest-ink);
+  --color-lichen: var(--lichen-gray);
+  --color-stone: var(--stone);
+  --color-slate: var(--slate);
+  --color-mist: var(--mist);
+  --color-meadow: var(--meadow);
+  --color-deep-forest: var(--deep-forest);
+  --color-deep-teal: var(--deep-teal);
+  --color-olive: var(--olive);
+  --color-plum: var(--plum);
+  --color-saffron: var(--saffron);
+  --color-iris: var(--iris);
+  --color-mint: var(--mint-surface);
+  --color-lime: var(--lime-surface);
+  --color-lavender: var(--lavender-surface);
+  --color-blush: var(--blush-surface);
+  --color-butter: var(--buttercream);
+  --color-sage: var(--sage-glow);
+  --color-petal: var(--petal);
+
+  /* Alias nama lama → nilai Lattice (agar komponen lama tetap konsisten) */
+  --color-ink: var(--forest-ink);
+  --color-graphite: var(--lichen-gray);
+  --color-steel: var(--stone);
+  --color-rule: #e4e1d3;
+  --color-edge: #e4e1d3;
+  --color-ice: var(--mint-surface);
+  --color-forest: var(--deep-forest);
+  --color-network: var(--deep-forest);
+  --color-mint: var(--mint-surface);
+  --color-brown: var(--saffron);
+  --color-paper: var(--paper-white);
+
+  --radius-sm: 7px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+  --radius-2xl: 29px;
+
+  /* Bayangan lembut bertinta forest (Lattice) */
+  --shadow-md: color(srgb 0 0.121569 0.121569 / 0.04) 0px 12px 12px -6px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 6px 6px -3px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 3px 3px -1.5px, color(srgb 0 0.121569 0.121569 / 0.08) 0px 1px 1px -0.5px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 0px 0px 1px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Global scrollbar styling to match ScrollArea */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+  }
+}
+
+/* ── Lattice: kanvas parchment + tipografi tunggal ─────────────────────── */
+:root,
+[data-theme] {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  background-color: var(--background);
+}
+
+h1,
+h2,
+h3,
+.font-heading {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* Angka uang: tabular agar sejajar */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Label kategori ala Lattice: uppercase, tracking lebar */
+.eyebrow {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--forest-ink);
+}
