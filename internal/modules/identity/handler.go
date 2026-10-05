@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -197,28 +198,42 @@ func (h *Handler) gmailConnect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) gmailCallback(w http.ResponseWriter, r *http.Request) {
-	uid, _ := web.UserID(r.Context())
+	uid, ok := web.UserID(r.Context())
+	if !ok || uid == "" {
+		slog.Error("gmailCallback: uid kosong — session tidak valid atau middleware session tidak aktif")
+		http.Error(w, "sesi tidak valid, silakan login ulang lalu hubungkan Gmail kembali", http.StatusUnauthorized)
+		return
+	}
 	if h.gmailCfg == nil {
 		http.Error(w, "OAuth Gmail belum dikonfigurasi (isi GOOGLE_CLIENT_ID/SECRET)", http.StatusNotImplemented)
 		return
 	}
 	st, _ := r.Cookie("gmail_state")
 	if st == nil || st.Value == "" || st.Value != r.URL.Query().Get("state") {
-		http.Error(w, "state tidak valid", http.StatusBadRequest)
+		slog.Warn("gmailCallback: state tidak valid", "uid", uid, "cookie_state", func() string {
+			if st != nil {
+				return st.Value
+			}
+			return "(nil)"
+		}(), "query_state", r.URL.Query().Get("state"))
+		http.Error(w, "state tidak valid — kemungkinan cookie gmail_state hilang (coba ulangi dari halaman Akun)", http.StatusBadRequest)
 		return
 	}
 	verifier := cookieVal(r, "gmail_verifier")
 	tok, err := h.gmailCfg.Exchange(r.Context(), r.URL.Query().Get("code"), oauth2.VerifierOption(verifier))
 	if err != nil {
+		slog.Error("gmailCallback: gagal tukar kode", "uid", uid, "error", err)
 		http.Error(w, "gagal tukar kode Gmail: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	if tok.RefreshToken == "" {
+		slog.Warn("gmailCallback: refresh token kosong", "uid", uid)
 		http.Error(w, "Google tidak memberi refresh token (coba putus dulu di myaccount.google.com/permissions)", http.StatusBadGateway)
 		return
 	}
 	enc, err := h.encryptor.Encrypt(tok.RefreshToken)
 	if err != nil {
+		slog.Error("gmailCallback: gagal enkripsi token", "uid", uid, "error", err)
 		http.Error(w, "gagal enkripsi token", http.StatusInternalServerError)
 		return
 	}
@@ -232,9 +247,11 @@ func (h *Handler) gmailCallback(w http.ResponseWriter, r *http.Request) {
 		ON CONFLICT (user_id, google_email) DO UPDATE
 		  SET enc_refresh_token=EXCLUDED.enc_refresh_token, status='active', updated_at=now()`, uid, email, enc)
 	if err != nil {
-		http.Error(w, "gagal menyimpan koneksi Gmail", http.StatusInternalServerError)
+		slog.Error("gmailCallback: gagal INSERT gmail_connections", "uid", uid, "email", email, "error", err)
+		http.Error(w, "gagal menyimpan koneksi Gmail: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	slog.Info("gmailCallback: koneksi Gmail berhasil disimpan", "uid", uid, "email", email)
 	audit.Record(r.Context(), h.pool, uid, "gmail.connect", email, nil)
 	clearCookie(w, "gmail_state")
 	clearCookie(w, "gmail_verifier")
