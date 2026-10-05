@@ -91,6 +91,11 @@ export default function AkunPage() {
         if (st?.scan_window) setScan({ window: st.scan_window, limit: st.scan_limit || 100 });
         // Pulihkan indikator progres bila ada sync yang masih berjalan.
         await restoreActiveJob(c[0].id);
+      } else {
+        // Tidak ada koneksi — bersihkan state terkait Gmail.
+        setSenders([]);
+        setStatus(null);
+        setJob(null);
       }
       setRecurring(await getRecurring().catch(() => []));
     } finally {
@@ -120,7 +125,17 @@ export default function AkunPage() {
     try {
       await disconnectGmail(id);
       toast.success('Gmail diputus');
-      load();
+      // Reset state lokal lebih dulu agar UI tidak menampilkan koneksi lama
+      // saat menunggu refetch dari server.
+      setConns([]);
+      setStatus(null);
+      setSenders([]);
+      setJob(null);
+      clearStoredJob();
+      if (esRef.current) { esRef.current.close(); esRef.current = null; }
+      // Refetch data terbaru dari server (await agar tidak ada race condition
+      // antara optimistic update di atas dengan hasil load()).
+      await load();
     } catch (e) { toast.error(e?.response?.data?.message || 'Gagal memutus Gmail'); }
     finally { setBusy(''); }
   }

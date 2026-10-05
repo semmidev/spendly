@@ -27,12 +27,14 @@ func Success(w http.ResponseWriter, status int, message string, data any, meta a
 		message = "OK"
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store, max-age=0")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(Response{Success: true, Message: message, Data: data, Meta: meta})
 }
 
 func JSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store, max-age=0")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(Response{Success: true, Message: "OK", Data: data})
 }

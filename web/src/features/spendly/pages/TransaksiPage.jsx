@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Search, Trash2, ReceiptText, Sparkles, Inbox, RotateCcw, CalendarDays } from 'lucide-react';
+import { Search, Trash2, ReceiptText, Sparkles, Inbox, RotateCcw, ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { Panel, SectionTitle, Chip, CategoryBadge, EmptyState } from '@/features/spendly/components/primitives';
+import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { Panel, SectionTitle, CategoryBadge, EmptyState } from '@/features/spendly/components/primitives';
 import { uniqueCategories } from '@/features/spendly/categories';
 import {
   getTransactions, deleteTransaction, restoreTransaction, getReviewQueue, confirmReview, ignoreReview,
@@ -59,6 +59,27 @@ function groupItems(items, group) {
     g.total += t.amount;
   }
   return [...map.values()];
+}
+
+// Dropdown filter ringkas (select native: aksesibel + picker bawaan di mobile).
+function FilterSelect({ label, className, children, ...props }) {
+  return (
+    <label className="min-w-0">
+      <span className="eyebrow mb-1 block">{label}</span>
+      <div className="relative">
+        <select
+          {...props}
+          className={cn(
+            'h-10 w-full min-w-0 cursor-pointer appearance-none truncate rounded-full border border-border bg-card pl-3 pr-7 text-xs font-medium text-forest-ink outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+            className,
+          )}
+        >
+          {children}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-lichen" />
+      </div>
+    </label>
+  );
 }
 
 export default function TransaksiPage() {
@@ -281,11 +302,18 @@ export default function TransaksiPage() {
             />
           </div>
 
-          {/* Filter tanggal */}
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4">
-            {RANGES.map((r) => (
-              <Chip key={r.key} active={range === r.key} onClick={() => pickRange(r.key)}>{r.label}</Chip>
-            ))}
+          {/* Filter: rentang tanggal, kategori, pengelompokan */}
+          <div className="grid grid-cols-3 gap-2">
+            <FilterSelect label="Rentang" aria-label="Rentang tanggal" value={range} onChange={(e) => pickRange(e.target.value)}>
+              {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </FilterSelect>
+            <FilterSelect label="Kategori" aria-label="Filter kategori" value={cat} onChange={(e) => { setCat(e.target.value); load(q, e.target.value, 1); }}>
+              <option value="">Semua</option>
+              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+            </FilterSelect>
+            <FilterSelect label="Kelompok" aria-label="Kelompok transaksi" value={group} onChange={(e) => setGroup(e.target.value)}>
+              {GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+            </FilterSelect>
           </div>
           {range === 'custom' && (
             <div className="flex items-center gap-2">
@@ -297,26 +325,6 @@ export default function TransaksiPage() {
               </button>
             </div>
           )}
-
-          {/* Filter kategori */}
-          {cats.length > 0 && (
-            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-              <Chip active={cat === ''} onClick={() => { setCat(''); load(q, '', 1); }}>Semua</Chip>
-              {cats.map((c) => (
-                <Chip key={c} active={cat === c} onClick={() => { setCat(c); load(q, c, 1); }}>{c}</Chip>
-              ))}
-            </div>
-          )}
-
-          {/* Grouping */}
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1.5 font-mono text-[11px] text-lichen"><CalendarDays className="h-3.5 w-3.5" /> Kelompok</span>
-            <div className="flex gap-2">
-              {GROUPS.map((g) => (
-                <Chip key={g.key} active={group === g.key} onClick={() => setGroup(g.key)}>{g.label}</Chip>
-              ))}
-            </div>
-          </div>
         </>
       )}
 
