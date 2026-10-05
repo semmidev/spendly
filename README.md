@@ -17,6 +17,19 @@ Pengeluaran di luar email dicatat manual.
 
 ---
 
+## Tangkapan Layar
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/home.png" width="100%" alt="Beranda — ringkasan pengeluaran bulan ini" /><br/><sub>Beranda</sub></td>
+    <td align="center"><img src="docs/transaction.png" width="100%" alt="Transaksi — daftar transaksi dengan filter dan sumber dana" /><br/><sub>Transaksi</sub></td>
+    <td align="center"><img src="docs/report.png" width="100%" alt="Laporan — tren dan per kategori" /><br/><sub>Laporan</sub></td>
+    <td align="center"><img src="docs/account.png" width="100%" alt="Akun — koneksi Gmail dan pengaturan scan" /><br/><sub>Akun</sub></td>
+  </tr>
+</table>
+
+---
+
 ## Daftar Isi
 
 - [Tentang](#tentang)
@@ -59,25 +72,6 @@ shared wallet, OCR struk.
 3. **AI mengekstrak, kode menghitung.** Semua angka laporan berasal dari SQL.
 4. **Izin minimum, transparan.** Hanya email dari pengirim yang user pilih yang dibaca.
 5. **Tetap berguna tanpa Gmail.** Input manual selalu jalan.
-
----
-
-## Tangkapan Layar
-
-<table>
-  <tr>
-    <th align="center">Beranda</th>
-    <th align="center">Laporan</th>
-    <th align="center">Akun</th>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/home.png" width="220" alt="Beranda — ringkasan pengeluaran bulan ini" /></td>
-    <td align="center"><img src="docs/report.png" width="220" alt="Laporan — tren dan per kategori" /></td>
-    <td align="center"><img src="docs/account.png" width="220" alt="Akun — koneksi Gmail dan pengaturan scan" /></td>
-  </tr>
-</table>
-
-<p align="center"><em>Ringkasan bulan ini, laporan tren & per kategori, dan pengaturan koneksi Gmail.</em></p>
 
 ---
 
