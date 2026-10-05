@@ -23,6 +23,7 @@ export default function BerandaPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const esRef = useRef(null);
+  const mountedRef = useRef(true);
 
   async function load() {
     setLoading(true);
@@ -43,12 +44,17 @@ export default function BerandaPage() {
   }
 
   useEffect(() => {
+    mountedRef.current = true;
     load();
     const h = () => load();
     window.addEventListener('spendly:refresh', h);
     return () => {
+      mountedRef.current = false;
       window.removeEventListener('spendly:refresh', h);
-      if (esRef.current) esRef.current.close();
+      if (esRef.current) {
+        esRef.current.close();
+        esRef.current = null;
+      }
     };
   }, []);
 
@@ -63,19 +69,33 @@ export default function BerandaPage() {
       es.onmessage = (e) => {
         let p;
         try { p = JSON.parse(e.data); } catch { return; }
+        if (!mountedRef.current) { es.close(); return; }
         if (['done', 'error', 'canceled'].includes(p.status)) {
           es.close();
           if (esRef.current === es) esRef.current = null;
           if (p.status === 'done') toast.success(`Selesai: ${p.new} baru, ${p.extracted} diekstrak`);
           else if (p.status === 'error') toast.error(p.message || 'Sinkronisasi gagal');
-          setSyncing(false);
-          load();
+          if (mountedRef.current) { setSyncing(false); load(); }
         }
       };
-      es.onerror = () => { /* biarkan reconnect sampai selesai */ };
+      es.onerror = () => {
+        if (!esRef.current) return;
+        import('@/features/spendly/api').then(({ getSyncJob }) =>
+          getSyncJob(job_id)
+            .then(({ progress }) => {
+              if (!mountedRef.current) { es.close(); esRef.current = null; return; }
+              if (progress && ['done', 'error', 'canceled'].includes(progress.status)) {
+                es.close();
+                esRef.current = null;
+                if (mountedRef.current) { setSyncing(false); load(); }
+              }
+            })
+            .catch(() => { es.close(); esRef.current = null; if (mountedRef.current) setSyncing(false); })
+        );
+      };
     } catch (e) {
       toast.error(e?.response?.data?.message || 'Gagal sinkronisasi');
-      setSyncing(false);
+      if (mountedRef.current) setSyncing(false);
     }
   }
 

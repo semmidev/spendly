@@ -226,13 +226,15 @@ func (h *Handler) gmailCallback(w http.ResponseWriter, r *http.Request) {
 	if _, e, _, verr := h.verifyIDToken(r.Context(), tok); verr == nil {
 		email = e
 	}
+	// Atomic upsert: buat baru atau perbarui token bila koneksi sudah ada.
 	_, err = h.pool.Exec(r.Context(), `INSERT INTO gmail_connections (user_id, google_email, enc_refresh_token, status, backfill_days)
 		VALUES ($1,$2,$3,'active',30)
-		ON CONFLICT DO NOTHING`, uid, email, enc)
-	_ = err
-	// update bila koneksi email sama sudah ada
-	_, _ = h.pool.Exec(r.Context(), `UPDATE gmail_connections SET enc_refresh_token=$3, status='active'
-		WHERE user_id=$1 AND google_email=$2`, uid, email, enc)
+		ON CONFLICT (user_id, google_email) DO UPDATE
+		  SET enc_refresh_token=EXCLUDED.enc_refresh_token, status='active', updated_at=now()`, uid, email, enc)
+	if err != nil {
+		http.Error(w, "gagal menyimpan koneksi Gmail", http.StatusInternalServerError)
+		return
+	}
 	audit.Record(r.Context(), h.pool, uid, "gmail.connect", email, nil)
 	clearCookie(w, "gmail_state")
 	clearCookie(w, "gmail_verifier")

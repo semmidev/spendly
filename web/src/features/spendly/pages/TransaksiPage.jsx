@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Search, Trash2, ReceiptText, Sparkles, Inbox, RotateCcw, CalendarDays } from 'lucide-react';
@@ -77,6 +77,7 @@ export default function TransaksiPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
   const load = useCallback(async (query = q, category = cat, p = 1, append = false, r = range, f = from, t = to) => {
     setLoading(true);
@@ -110,7 +111,24 @@ export default function TransaksiPage() {
   }, [tab, q, cat, range, from, to]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setPage(1); load(q, cat, 1); }, [tab]);
+  useEffect(() => {
+    setPage(1);
+    // Reset items langsung agar tidak flash konten tab lama.
+    setItems([]);
+    setIgnoredEmails([]);
+    load(q, cat, 1);
+  }, [tab]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  // Debounce pencarian: tunggu 400ms setelah user berhenti mengetik.
+  useEffect(() => {
+    if (tab !== 'all') return;
+    const t = setTimeout(() => load(q, cat, 1), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
   useEffect(() => {
     getCategories().then((d) => setCats(uniqueCategories(d?.items || []))).catch(() => {});
   }, []);
@@ -176,9 +194,9 @@ export default function TransaksiPage() {
     } catch (e) { toast.error(e?.response?.data?.message || 'Gagal'); }
   }
 
-  function renderRow(t) {
+  function TxRow({ t }) {
     return (
-      <div key={t.id} className="px-4 py-3">
+      <div className="px-4 py-3">
         <div className="flex items-center gap-3">
           <CategoryBadge name={t.category} />
           <div className="min-w-0 flex-1">
@@ -333,12 +351,14 @@ export default function TransaksiPage() {
                     <span className="eyebrow">{g.label}</span>
                     <span className="tnum font-mono text-[11px] font-medium text-lichen">{formatCurrency(g.total)}</span>
                   </div>
-                  <Panel className="divide-y divide-border">{g.items.map(renderRow)}</Panel>
+                  <Panel className="divide-y divide-border">
+                    {g.items.map((t) => <TxRow key={t.id} t={t} />)}
+                  </Panel>
                 </div>
               ))}
             </div>
           ) : (
-            items.length > 0 && <Panel className="divide-y divide-border">{items.map(renderRow)}</Panel>
+            items.length > 0 && <Panel className="divide-y divide-border">{items.map((t) => <TxRow key={t.id} t={t} />)}</Panel>
           )}
 
           {tab === 'all' && items.length < total && (

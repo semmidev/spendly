@@ -424,7 +424,7 @@ func normalizeMerchant(raw string) string {
 	}
 	fields := strings.FieldsFunc(r, func(c rune) bool { return c < 'A' || c > 'Z' })
 	if len(fields) == 0 {
-		return strings.Title(strings.ToLower(strings.TrimSpace(raw)))
+		return toTitle(strings.TrimSpace(raw))
 	}
 	known := map[string]string{
 		"GRAB": "Grab", "GOJEK": "Gojek", "GOPAY": "GoPay", "OVO": "OVO", "DANA": "DANA",
@@ -445,12 +445,21 @@ func normalizeMerchant(raw string) string {
 		}
 	}
 	if best == "" {
-		return strings.Title(strings.ToLower(strings.TrimSpace(raw)))
+		return toTitle(strings.TrimSpace(raw))
 	}
 	if n, ok := known[best]; ok {
 		return n
 	}
 	l := strings.ToLower(best)
+	return strings.ToUpper(l[:1]) + l[1:]
+}
+
+// toTitle: Sentence case aman (mengganti strings.Title yang deprecated).
+func toTitle(s string) string {
+	if s == "" {
+		return s
+	}
+	l := strings.ToLower(s)
 	return strings.ToUpper(l[:1]) + l[1:]
 }
 

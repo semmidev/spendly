@@ -390,7 +390,14 @@ export default function AkunPage() {
                     <span className="tnum font-mono text-[11px] text-lichen">{p.processed}/{p.total || '?'}</span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
-                    <div className={`h-full rounded-full ${p.status === 'error' ? 'bg-destructive' : 'bg-network'} transition-[width]`} style={{ width: `${pct}%` }} />
+                    {isIndeterminate ? (
+                      <div className="h-full w-1/3 rounded-full bg-network animate-pulse" />
+                    ) : (
+                      <div
+                        className={`h-full rounded-full ${p.status === 'error' ? 'bg-destructive' : 'bg-network'} transition-[width] duration-300`}
+                        style={{ width: `${Math.max(2, pct)}%` }}
+                      />
+                    )}
                   </div>
                   <p className="truncate font-mono text-[11px] text-lichen">{p.current || p.message}</p>
                   <div className="flex gap-2">

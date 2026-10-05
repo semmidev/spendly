@@ -109,9 +109,17 @@ func (s *Service) StartSyncJob(ctx context.Context, uid, connectionID string, fo
 	m := s.jobs
 	m.mu.Lock()
 	if jid, ok := m.active[connectionID]; ok {
-		if existing, ok := m.jobs[jid]; ok && existing.snapshot().Status == "running" {
-			m.mu.Unlock()
-			return "", apperr.Conflict("sinkronisasi sedang berjalan untuk koneksi ini")
+		if existing, ok := m.jobs[jid]; ok {
+			// Baca status langsung tanpa snapshot() agar tidak dead-lock
+			// (kita sudah pegang m.mu; j.mu tidak perlu di sini karena
+			// goroutine job baru akan dibuat setelah m.mu dilepas).
+			existing.mu.Lock()
+			st := existing.progress.Status
+			existing.mu.Unlock()
+			if st == "running" {
+				m.mu.Unlock()
+				return "", apperr.Conflict("sinkronisasi sedang berjalan untuk koneksi ini")
+			}
 		}
 	}
 	id := uuid.NewString()

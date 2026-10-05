@@ -16,13 +16,15 @@ export default function LaporanPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     (async () => {
       try {
         const { data } = await client.get('/reports/monthly');
-        setData(data);
-      } catch { setData(null); }
-      finally { setLoading(false); }
+        if (mounted) setData(data);
+      } catch { if (mounted) setData(null); }
+      finally { if (mounted) setLoading(false); }
     })();
+    return () => { mounted = false; };
   }, []);
 
   function exportCsv() {
