@@ -19,12 +19,12 @@ Pengeluaran di luar email dicatat manual.
 
 ## Tangkapan Layar
 
-<table>
+<table width="100%">
   <tr>
-    <td align="center"><img src="docs/home.png" width="100%" alt="Beranda — ringkasan pengeluaran bulan ini" /><br/><sub>Beranda</sub></td>
-    <td align="center"><img src="docs/transaction.png" width="100%" alt="Transaksi — daftar transaksi dengan filter dan sumber dana" /><br/><sub>Transaksi</sub></td>
-    <td align="center"><img src="docs/report.png" width="100%" alt="Laporan — tren dan per kategori" /><br/><sub>Laporan</sub></td>
-    <td align="center"><img src="docs/account.png" width="100%" alt="Akun — koneksi Gmail dan pengaturan scan" /><br/><sub>Akun</sub></td>
+    <td align="center" width="25%"><img src="docs/home.png" width="100%" alt="Beranda — ringkasan pengeluaran bulan ini" /><br/><sub>Beranda</sub></td>
+    <td align="center" width="25%"><img src="docs/transaction.png" width="100%" alt="Transaksi — daftar transaksi dengan filter dan sumber dana" /><br/><sub>Transaksi</sub></td>
+    <td align="center" width="25%"><img src="docs/report.png" width="100%" alt="Laporan — tren dan per kategori" /><br/><sub>Laporan</sub></td>
+    <td align="center" width="25%"><img src="docs/account.png" width="100%" alt="Akun — koneksi Gmail dan pengaturan scan" /><br/><sub>Akun</sub></td>
   </tr>
 </table>
 
