@@ -45,8 +45,11 @@ func Fingerprint(userID string, amount int64, currency, ref string) string {
 
 func itoa64(v int64) string { return strconv.FormatInt(v, 10) }
 
-// CreateEmail: insert idempoten via fingerprint UNIQUE.
-// Return (id, true) bila baru; ("", false) bila fingerprint sudah ada.
+// CreateEmail: idempoten. Bila raw_email_id diberikan, upsert per email
+// (satu email = maksimal satu transaksi) sehingga proses ulang tidak
+// menduplikasi. Tanpa raw_email_id, dedup via fingerprint UNIQUE.
+// Return (id, true) bila baris dibuat/diperbarui; ("", false) bila dianggap
+// duplikat (bentrok fingerprint dengan email lain).
 func (s *Store) CreateEmail(in EmailInput, uid string) (string, bool) {
 	ctx := context.Background()
 	catID, catName := s.resolveCategory(ctx, uid, in.Category)
@@ -63,6 +66,42 @@ func (s *Store) CreateEmail(in EmailInput, uid string) (string, bool) {
 	if status == "" {
 		status = "confirmed"
 	}
+
+	// Jalur email: upsert berdasarkan raw_email_id (uniqueness dijamin index).
+	if in.RawEmailID != "" {
+		var out string
+		err := s.pool.QueryRow(ctx, `INSERT INTO transactions
+			(id, user_id, amount, currency, occurred_at, merchant_id, category_id,
+			 payment_source, note, source, raw_email_id, reference_no, fingerprint,
+			 status, duplicate_of, confidence)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'email',$10::uuid,$11,$12,$13,$14::uuid,$15)
+			ON CONFLICT (raw_email_id) WHERE raw_email_id IS NOT NULL DO UPDATE SET
+				amount=EXCLUDED.amount, currency=EXCLUDED.currency, occurred_at=EXCLUDED.occurred_at,
+				merchant_id=EXCLUDED.merchant_id, category_id=EXCLUDED.category_id,
+				payment_source=EXCLUDED.payment_source, note=EXCLUDED.note,
+				reference_no=EXCLUDED.reference_no, fingerprint=EXCLUDED.fingerprint,
+				status=EXCLUDED.status, duplicate_of=EXCLUDED.duplicate_of,
+				confidence=EXCLUDED.confidence, deleted_at=NULL
+			RETURNING id::text`,
+			id.String(), uid, in.Amount, in.Currency, in.OccurredAt.UTC(),
+			merchID, catID, nullStr(in.Source), in.Note,
+			nullStr(in.RawEmailID), nullStr(in.ReferenceNo), nullStr(in.Fingerprint),
+			status, nullStr(in.DuplicateOf), in.Confidence).Scan(&out)
+		if err == nil && out != "" {
+			return out, true
+		}
+		// Gagal (mis. bentrok fingerprint unik dengan transaksi email lain):
+		// coba pulihkan record lama yang dihapus, kalau tidak ada jangan insert
+		// baris baru untuk email ini.
+		if in.Fingerprint != "" {
+			if rid, rerr := s.restoreDeleted(ctx, uid, in, catID, merchID, status); rerr == nil && rid != "" {
+				return rid, true
+			}
+		}
+		return "", false
+	}
+
+	// Tanpa raw_email_id: dedup via fingerprint UNIQUE.
 	var out string
 	err := s.pool.QueryRow(ctx, `INSERT INTO transactions
 		(id, user_id, amount, currency, occurred_at, merchant_id, category_id,
@@ -77,8 +116,6 @@ func (s *Store) CreateEmail(in EmailInput, uid string) (string, bool) {
 	if err == nil && out != "" {
 		return out, true
 	}
-	// Bentrok fingerprint: bila record lama sudah dihapus manual, pulihkan dan
-	// perbarui dengan hasil ekstraksi terbaru (reprocess) alih-alih melewatkannya.
 	if in.Fingerprint != "" {
 		if rid, rerr := s.restoreDeleted(ctx, uid, in, catID, merchID, status); rerr == nil && rid != "" {
 			return rid, true

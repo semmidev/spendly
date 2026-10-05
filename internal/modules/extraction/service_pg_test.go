@@ -112,14 +112,14 @@ func TestPipelineIntegration(t *testing.T) {
 		t.Fatalf("bad amount: amount=%d status=%q", amt, status)
 	}
 
-	// 6. transaksi dihapus manual → dipulihkan (id sama) saat diproses ulang
+	// 6. transaksi dihapus manual → dipulihkan (id sama) saat raw_email yang
+	//    sama diproses ulang (upsert per raw_email_id).
 	var tx1 string
 	_ = pool.QueryRow(ctx, `SELECT id::text FROM transactions WHERE raw_email_id=$1::uuid`, raw).Scan(&tx1)
 	if _, err := pool.Exec(ctx, `UPDATE transactions SET deleted_at=now() WHERE id=$1::uuid`, tx1); err != nil {
 		t.Fatalf("soft delete: %v", err)
 	}
-	raw6 := newRaw()
-	if err := svc.apply(ctx, raw6, uid, time.Now(), res, llm.Usage{}, false); err != nil {
+	if err := svc.apply(ctx, raw, uid, time.Now(), res, llm.Usage{}, false); err != nil {
 		t.Fatalf("apply restore: %v", err)
 	}
 	var gotID string
@@ -132,5 +132,17 @@ func TestPipelineIntegration(t *testing.T) {
 	}
 	if gotID != tx1 {
 		t.Fatalf("transaksi dipulihkan sebagai baris baru: %s != %s", gotID, tx1)
+	}
+
+	// 7. raw_email_id unik: proses ulang berulang tetap satu transaksi.
+	for i := 0; i < 3; i++ {
+		if err := svc.apply(ctx, raw, uid, time.Now(), res, llm.Usage{}, false); err != nil {
+			t.Fatalf("apply reprocess #%d: %v", i, err)
+		}
+	}
+	var cnt int
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM transactions WHERE raw_email_id=$1::uuid`, raw).Scan(&cnt)
+	if cnt != 1 {
+		t.Fatalf("duplikat raw_email_id: count=%d mau 1", cnt)
 	}
 }
