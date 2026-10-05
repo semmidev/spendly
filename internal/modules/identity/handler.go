@@ -293,7 +293,10 @@ func (h *Handler) deleteConnection(w http.ResponseWriter, r *http.Request) {
 				revokeToken(r.Context(), raw)
 			}
 		}
-		_, _ = h.pool.Exec(r.Context(), `DELETE FROM gmail_connections WHERE id=$1::uuid AND user_id=$2`, id, uid)
+		if _, err := h.pool.Exec(r.Context(), `DELETE FROM gmail_connections WHERE id=$1::uuid AND user_id=$2`, id, uid); err != nil {
+			web.Error(w, r, apperr.Internal("gagal memutus koneksi Gmail", err))
+			return
+		}
 		audit.Record(r.Context(), h.pool, uid, "gmail.disconnect", id, nil)
 	}
 	web.Success(w, http.StatusOK, "Gmail diputus", nil, nil)

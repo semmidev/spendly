@@ -61,12 +61,11 @@ func (h *SPAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Aset ber-hash dapat di-cache lama; index.html tidak (lihat serveIndex).
-	if strings.HasPrefix(r.URL.Path, "/assets/") {
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	} else {
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	}
+	// Jangan cache UI/aset sama sekali: setiap rebuild harus langsung terlihat,
+	// tanpa perlu hard-reload. (Aplikasi kecil; biaya refetch dapat diterima.)
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	h.fileServer.ServeHTTP(w, r)
 }
 
@@ -77,8 +76,9 @@ func (h *SPAHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	_, _ = w.Write(data)
 }
 

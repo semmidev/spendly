@@ -351,17 +351,33 @@ export default function AkunPage() {
           ) : (
             <div className="space-y-3">
               {conns.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 rounded-md border border-border bg-mint/50 px-3.5 py-3">
-                  <Mail className="h-4 w-4 shrink-0 text-lichen" />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-forest-ink">{c.google_email || 'Gmail terhubung'}</span>
-                  <span className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] font-medium ${
-                    c.status === 'active' ? 'border-deep-forest/30 bg-sage text-deep-forest' : 'border-saffron/40 bg-butter text-saffron'
-                  }`}>
-                    {c.status}
-                  </span>
-                  <button type="button" onClick={() => onDisconnect(c.id)} disabled={busy === 'dc'} className="shrink-0 text-xs font-medium text-destructive cursor-pointer">
-                    Putus
-                  </button>
+                <div key={c.id} className="rounded-md border border-border bg-mint/50 px-3.5 py-3">
+                  <div className="flex items-center gap-3">
+                    <Mail className="h-4 w-4 shrink-0 text-lichen" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-forest-ink">{c.google_email || 'Gmail terhubung'}</span>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] font-medium ${
+                      c.status === 'active' ? 'border-deep-forest/30 bg-sage text-deep-forest' : 'border-saffron/40 bg-butter text-saffron'
+                    }`}>
+                      {c.status}
+                    </span>
+                    <button type="button" onClick={() => onDisconnect(c.id)} disabled={busy === 'dc'} className="shrink-0 text-xs font-medium text-destructive cursor-pointer">
+                      Putus
+                    </button>
+                  </div>
+                  {c.status === 'needs_reauth' && (
+                    <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
+                      <p className="text-[11px] leading-relaxed text-saffron">
+                        Akses Gmail terputus. Hubungkan ulang agar sinkronisasi bisa jalan lagi.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={connectGmail}
+                        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-forest-ink bg-forest-ink text-xs font-medium text-white cursor-pointer"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" /> Hubungkan ulang Gmail
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               {status && (
