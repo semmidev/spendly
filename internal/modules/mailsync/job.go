@@ -55,10 +55,17 @@ func (j *job) broadcast(p Progress) {
 	}
 	j.mu.Unlock()
 	for _, ch := range subs {
-		select {
-		case ch <- p:
-		default: // pelanggan lambat → lewati (snapshot berikutnya menyusul)
-		}
+		// Kirim non-blocking; abaikan bila pelanggan lambat atau channel sudah ditutup.
+		safeSend(ch, p)
+	}
+}
+
+// safeSend: kirim ke channel tanpa panik bila sudah ditutup.
+func safeSend(ch chan Progress, p Progress) {
+	defer func() { recover() }() //nolint:errcheck
+	select {
+	case ch <- p:
+	default:
 	}
 }
 
@@ -213,16 +220,20 @@ func (s *Service) ActiveSyncJob(ctx context.Context, uid, connectionID string) (
 	}
 	m := s.jobs
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	id, ok := m.active[connectionID]
 	if !ok {
+		m.mu.Unlock()
 		return "", false
 	}
 	j, ok := m.jobs[id]
+	m.mu.Unlock()
 	if !ok {
 		return "", false
 	}
+	// Baca status dengan j.mu untuk menghindari data race.
+	j.mu.Lock()
 	st := j.progress.Status
+	j.mu.Unlock()
 	if st != "running" && st != "paused" {
 		return "", false
 	}
@@ -371,13 +382,16 @@ func (s *Service) SubscribeSyncJob(jobID, uid string) (<-chan Progress, func(), 
 	initial := j.progress
 	done := j.progress.Status == "done" || j.progress.Status == "error" || j.progress.Status == "canceled"
 	j.mu.Unlock()
-	ch <- initial
+	// Kirim snapshot awal setelah lock dilepas agar tidak memblokir.
+	safeSend(ch, initial)
 	unsub := func() {
 		j.mu.Lock()
 		delete(j.subs, ch)
 		j.mu.Unlock()
 	}
 	if done {
+		// Hapus dulu dari subs sebelum close agar broadcast tidak panik.
+		unsub()
 		close(ch)
 	}
 	return ch, unsub, true

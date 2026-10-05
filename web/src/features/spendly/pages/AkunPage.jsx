@@ -72,6 +72,7 @@ export default function AkunPage() {
   const [scan, setScan] = useState({ window: '30d', limit: 100 });
   const [job, setJob] = useState(null); // { id, progress }
   const esRef = useRef(null);
+  const mountedRef = useRef(true);
 
   const connId = conns[0]?.id || '';
 
@@ -98,8 +99,15 @@ export default function AkunPage() {
   }
 
   useEffect(() => {
+    mountedRef.current = true;
     load();
-    return () => { if (esRef.current) esRef.current.close(); };
+    return () => {
+      mountedRef.current = false;
+      if (esRef.current) {
+        esRef.current.close();
+        esRef.current = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -157,41 +165,74 @@ export default function AkunPage() {
     es.onmessage = (e) => {
       let p;
       try { p = JSON.parse(e.data); } catch { return; }
+      if (!mountedRef.current) { es.close(); return; }
       setJob({ id: jobId, progress: p });
       if (TERMINAL_STATUSES.includes(p.status)) {
         es.close();
         esRef.current = null;
         clearStoredJob();
+        if (!mountedRef.current) return;
         if (p.status === 'done') toast.success(`Selesai: ${p.new} baru, ${p.gated} diabaikan, ${p.extracted} diekstrak`);
         else if (p.status === 'error') toast.error(p.message || 'Sinkronisasi gagal');
         else toast('Sinkronisasi dibatalkan');
-        setTimeout(() => setJob(null), 2500);
+        setTimeout(() => { if (mountedRef.current) setJob(null); }, 2500);
         load();
       }
     };
-    es.onerror = () => { /* SSE akan reconnect otomatis selama belum selesai */ };
+    // Hentikan reconnect bila job sudah terminal (mis. server balas 404 / job selesai).
+    es.onerror = () => {
+      if (!esRef.current) return; // sudah ditutup secara sengaja
+      getSyncJob(jobId)
+        .then(({ progress }) => {
+          if (!mountedRef.current) { es.close(); esRef.current = null; return; }
+          if (progress && TERMINAL_STATUSES.includes(progress.status)) {
+            es.close();
+            esRef.current = null;
+            clearStoredJob();
+            setJob((prev) => prev?.id === jobId ? { id: jobId, progress } : prev);
+            setTimeout(() => { if (mountedRef.current) setJob(null); }, 2500);
+            load();
+          }
+          // Bila masih running/paused biarkan EventSource reconnect otomatis.
+        })
+        .catch(() => {
+          // Bila 404/network: job tidak dikenal server — bersihkan.
+          es.close();
+          esRef.current = null;
+          clearStoredJob();
+          if (mountedRef.current) setJob(null);
+        });
+    };
   }
 
   // Pulihkan indikator bila ada job yang masih berjalan (mis. setelah pindah menu).
-  async function restoreActiveJob(connId) {
+  async function restoreActiveJob(currentConnId) {
     let jobId = null;
     try {
-      const a = await getActiveSyncJob(connId);
+      const a = await getActiveSyncJob(currentConnId);
       jobId = a?.job_id || null;
     } catch { /* abaikan, coba penyimpanan lokal */ }
     if (!jobId) {
       const stored = readStoredJob();
-      if (stored && (!connId || stored.connId === connId)) jobId = stored.jobId;
+      if (stored && stored.connId === currentConnId) jobId = stored.jobId;
     }
     if (!jobId) return;
+    // Pastikan komponen masih terpasang sebelum melanjutkan.
+    if (!mountedRef.current) return;
     try {
       const { progress } = await getSyncJob(jobId);
+      if (!mountedRef.current) return;
       if (progress && ACTIVE_STATUSES.includes(progress.status)) {
-        saveStoredJob(connId, jobId);
+        saveStoredJob(currentConnId, jobId);
         setJob({ id: jobId, progress });
         subscribe(jobId);
       } else {
         clearStoredJob();
+        // Jika sudah terminal tapi job masih tersimpan di localStorage, tampilkan status terakhir sebentar.
+        if (progress && TERMINAL_STATUSES.includes(progress.status)) {
+          setJob({ id: jobId, progress });
+          setTimeout(() => { if (mountedRef.current) setJob(null); }, 3000);
+        }
       }
     } catch {
       clearStoredJob();
@@ -254,7 +295,9 @@ export default function AkunPage() {
   const initial = (user?.name || user?.email || 'S')[0].toUpperCase();
   const p = job?.progress;
   const jobActive = p && ACTIVE_STATUSES.includes(p.status);
-  const pct = p?.total > 0 ? Math.min(100, Math.round((p.processed / p.total) * 100)) : 0;
+  // Persentase progres: bila total belum diketahui (=0), tampilkan -1 sebagai sinyal indeterminate.
+  const pct = p?.total > 0 ? Math.min(100, Math.round((p.processed / p.total) * 100)) : -1;
+  const isIndeterminate = pct === -1 && jobActive;
 
   return (
     <div className="space-y-6">
