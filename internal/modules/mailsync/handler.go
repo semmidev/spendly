@@ -141,7 +141,7 @@ func (h *Handler) putSenders(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) startSync(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ConnectionID string `json:"connection_id"`
-		BackfillDays int    `json:"backfill_days"`
+		Force        bool   `json:"force"`
 		MaxEmails    int    `json:"max_emails"`
 	}
 	_ = web.Decode(r, &req)
@@ -149,7 +149,7 @@ func (h *Handler) startSync(w http.ResponseWriter, r *http.Request) {
 	if req.ConnectionID == "" {
 		req.ConnectionID = h.svc.firstConnection(r.Context(), uid)
 	}
-	jobID, err := h.svc.StartSyncJob(r.Context(), uid, req.ConnectionID, req.BackfillDays, req.MaxEmails)
+	jobID, err := h.svc.StartSyncJob(r.Context(), uid, req.ConnectionID, req.Force, req.MaxEmails)
 	if err != nil {
 		web.Error(w, r, err)
 		return

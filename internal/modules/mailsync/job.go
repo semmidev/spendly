@@ -16,7 +16,7 @@ type job struct {
 	id           string
 	userID       string
 	connectionID string
-	forceDays    int
+	force        bool
 	maxEmails    int
 
 	mu       sync.Mutex
@@ -90,7 +90,7 @@ func (j *job) gate(ctx context.Context) error {
 }
 
 // StartSyncJob: preflight sinkron (validasi), lalu jalankan scan di latar.
-func (s *Service) StartSyncJob(ctx context.Context, uid, connectionID string, forceDays, maxEmails int) (string, error) {
+func (s *Service) StartSyncJob(ctx context.Context, uid, connectionID string, force bool, maxEmails int) (string, error) {
 	if connectionID == "" {
 		return "", apperr.Invalid("belum ada koneksi Gmail — hubungkan dulu di Akun")
 	}
@@ -129,7 +129,7 @@ func (s *Service) StartSyncJob(ctx context.Context, uid, connectionID string, fo
 	}
 	j := &job{
 		id: id, userID: uid, connectionID: connectionID,
-		forceDays: forceDays, maxEmails: maxEmails,
+		force: force, maxEmails: maxEmails,
 		progress: Progress{Status: "running", Message: "menyiapkan"},
 		subs:     map[chan Progress]struct{}{},
 		done:     make(chan struct{}),
@@ -173,7 +173,7 @@ func (s *Service) runJob(ctx context.Context, j *job) {
 		s.persistProgress(j, snap, false)
 	}
 
-	stats, err := s.runSync(ctx, j.userID, j.connectionID, j.forceDays, j.maxEmails, func() error { return j.gate(ctx) }, report)
+	stats, err := s.runSync(ctx, j.userID, j.connectionID, j.force, j.maxEmails, func() error { return j.gate(ctx) }, report)
 
 	j.mu.Lock()
 	j.stats = stats

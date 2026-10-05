@@ -114,7 +114,7 @@ func TestSyncJobLifecycle(t *testing.T) {
 	svc, uid, connID := setupJobTest(t)
 	ctx := context.Background()
 
-	jobID, err := svc.StartSyncJob(ctx, uid, connID, 7, 6)
+	jobID, err := svc.StartSyncJob(ctx, uid, connID, true, 6)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestSyncJobCancel(t *testing.T) {
 	svc, uid, connID := setupJobTest(t)
 	ctx := context.Background()
 
-	jobID, err := svc.StartSyncJob(ctx, uid, connID, 7, 6)
+	jobID, err := svc.StartSyncJob(ctx, uid, connID, true, 6)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}

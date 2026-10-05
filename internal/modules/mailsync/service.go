@@ -161,6 +161,20 @@ func windowDays(window string) int {
 	}
 }
 
+// windowStart: batas awal (inklusif) preset jendela. "month" = tanggal 1 bulan
+// berjalan (00:00 lokal), bukan "N hari ke belakang" (yang bisa menarik tanggal
+// dari bulan lalu).
+func windowStart(window string, now time.Time) time.Time {
+	if window == "month" {
+		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	}
+	days := windowDays(window)
+	if days <= 0 {
+		days = 30
+	}
+	return now.AddDate(0, 0, -days)
+}
+
 func validWindow(w string) bool {
 	switch w {
 	case "1d", "7d", "month", "30d", "90d", "custom":
@@ -185,7 +199,7 @@ type Progress struct {
 // runSync menjalankan scan. gate() dipanggil sebelum tiap email (pause/cancel);
 // report() melaporkan progres. Tiap email disimpan dengan satu statement
 // idempoten sehingga tidak ada transaksi panjang yang ditahan.
-func (s *Service) runSync(ctx context.Context, uid, connectionID string, forceDays, maxEmails int, gate func() error, report func(Progress)) (Stats, error) {
+func (s *Service) runSync(ctx context.Context, uid, connectionID string, force bool, maxEmails int, gate func() error, report func(Progress)) (Stats, error) {
 	var st Stats
 	var encTok, historyID, window string
 	var scanLimit int
@@ -218,26 +232,23 @@ func (s *Service) runSync(ctx context.Context, uid, connectionID string, forceDa
 	}
 
 	var after, before time.Time
-	days := windowDays(window)
 	mode := "incremental"
 	switch {
 	case window == "custom" && scanFrom != nil && scanTo != nil:
 		// Rentang eksplisit; `before` eksklusif di Gmail → +1 hari agar `scan_to` ikut.
 		after = time.Date(scanFrom.Year(), scanFrom.Month(), scanFrom.Day(), 0, 0, 0, 0, time.Local)
 		before = time.Date(scanTo.Year(), scanTo.Month(), scanTo.Day(), 0, 0, 0, 0, time.Local).AddDate(0, 0, 1)
-		days = int(before.Sub(after).Hours() / 24)
-		mode = "backfill"
-	case forceDays > 0:
-		after = time.Now().AddDate(0, 0, -forceDays)
 		mode = "backfill"
 	default:
-		if days <= 0 {
-			days = 30
-		}
-		after = time.Now().AddDate(0, 0, -days)
-		if historyID == "" {
+		// Batas awal preset: "month" = tanggal 1 bulan berjalan, bukan N hari ke belakang.
+		after = windowStart(window, time.Now())
+		if force || historyID == "" {
 			mode = "backfill"
 		}
+	}
+	days := int(time.Since(after).Hours()/24) + 1
+	if !before.IsZero() {
+		days = int(before.Sub(after).Hours() / 24)
 	}
 	st.Limit, st.BackfillDays = limit, days
 

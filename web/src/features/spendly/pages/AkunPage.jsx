@@ -273,11 +273,7 @@ export default function AkunPage() {
   async function runSync(force) {
     try {
       const maxEmails = Number(scan.limit) || 0;
-      const { job_id } = await startGmailSync({
-        connection_id: connId,
-        max_emails: maxEmails,
-        ...(force && scan.window !== 'custom' ? { backfill_days: windowDays(scan.window) } : {}),
-      });
+      const { job_id } = await startGmailSync({ connection_id: connId, max_emails: maxEmails, force });
       saveStoredJob(connId, job_id);
       setJob({ id: job_id, progress: { status: 'running', message: 'menyiapkan', processed: 0, total: maxEmails } });
       subscribe(job_id);
@@ -446,7 +442,9 @@ export default function AkunPage() {
                 <p className="text-[11px] leading-relaxed text-lichen">
                   {scan.window === 'custom'
                     ? `Scan email dalam rentang ${scan.from || '…'} s/d ${scan.to || '…'}, maksimal ${scan.limit || 100} email.`
-                    : `Hanya email dari pengirim terpilih, ${windowDays(scan.window)} hari terakhir, maksimal ${scan.limit || 100} email per sinkronisasi.`}
+                    : scan.window === 'month'
+                      ? `Hanya email dari pengirim terpilih sejak tanggal 1 bulan ini, maksimal ${scan.limit || 100} email per sinkronisasi.`
+                      : `Hanya email dari pengirim terpilih, ${windowDays(scan.window)} hari terakhir, maksimal ${scan.limit || 100} email per sinkronisasi.`}
                   {' '}Sync hanya jalan saat kamu klik.
                 </p>
               </div>

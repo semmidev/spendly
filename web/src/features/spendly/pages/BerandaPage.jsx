@@ -9,7 +9,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Panel, SectionTitle, CategoryBadge, EmptyState } from '@/features/spendly/components/primitives';
 import { catMeta } from '@/features/spendly/categories';
 import { useAuthStore } from '@/features/auth/store';
-import { getSummary, getReport, getReviewQueue, startGmailSync, syncEventsUrl } from '@/features/spendly/api';
+import { getSummary, getReport, getReviewQueue, startGmailSync, getActiveSyncJob, getSyncJob, syncEventsUrl } from '@/features/spendly/api';
 
 const CHART = { total: { label: 'Total', color: '#2a4e1c' } };
 
@@ -43,9 +43,54 @@ export default function BerandaPage() {
     }
   }
 
+  function subscribe(jobId) {
+    if (esRef.current) esRef.current.close();
+    const es = new EventSource(syncEventsUrl(jobId));
+    esRef.current = es;
+    es.onmessage = (e) => {
+      let p;
+      try { p = JSON.parse(e.data); } catch { return; }
+      if (!mountedRef.current) { es.close(); return; }
+      if (['done', 'error', 'canceled'].includes(p.status)) {
+        es.close();
+        if (esRef.current === es) esRef.current = null;
+        if (p.status === 'done') toast.success(`Selesai: ${p.new} baru, ${p.extracted} diekstrak`);
+        else if (p.status === 'error') toast.error(p.message || 'Sinkronisasi gagal');
+        if (mountedRef.current) { setSyncing(false); load(); }
+      }
+    };
+    es.onerror = () => {
+      if (!esRef.current) return;
+      getSyncJob(jobId)
+        .then(({ progress }) => {
+          if (!mountedRef.current) { es.close(); esRef.current = null; return; }
+          if (progress && ['done', 'error', 'canceled'].includes(progress.status)) {
+            es.close();
+            esRef.current = null;
+            if (mountedRef.current) { setSyncing(false); load(); }
+          }
+          // masih running/dijeda → biarkan EventSource reconnect sendiri
+        })
+        .catch(() => { es.close(); esRef.current = null; if (mountedRef.current) setSyncing(false); });
+    };
+  }
+
+  // Pulihkan indikator loading bila ada sync yang sudah berjalan (mis. dimulai
+  // dari halaman Akun atau setelah reload).
+  async function restoreActiveSync() {
+    try {
+      const a = await getActiveSyncJob();
+      if (a?.job_id && mountedRef.current) {
+        setSyncing(true);
+        subscribe(a.job_id);
+      }
+    } catch { /* tidak ada job aktif */ }
+  }
+
   useEffect(() => {
     mountedRef.current = true;
     load();
+    restoreActiveSync();
     const h = () => load();
     window.addEventListener('spendly:refresh', h);
     return () => {
@@ -56,44 +101,24 @@ export default function BerandaPage() {
         esRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function onSync() {
+    if (syncing) return;
     setSyncing(true);
     try {
       const { job_id } = await startGmailSync({});
       toast('Sinkronisasi Gmail dimulai…');
-      if (esRef.current) esRef.current.close();
-      const es = new EventSource(syncEventsUrl(job_id));
-      esRef.current = es;
-      es.onmessage = (e) => {
-        let p;
-        try { p = JSON.parse(e.data); } catch { return; }
-        if (!mountedRef.current) { es.close(); return; }
-        if (['done', 'error', 'canceled'].includes(p.status)) {
-          es.close();
-          if (esRef.current === es) esRef.current = null;
-          if (p.status === 'done') toast.success(`Selesai: ${p.new} baru, ${p.extracted} diekstrak`);
-          else if (p.status === 'error') toast.error(p.message || 'Sinkronisasi gagal');
-          if (mountedRef.current) { setSyncing(false); load(); }
-        }
-      };
-      es.onerror = () => {
-        if (!esRef.current) return;
-        import('@/features/spendly/api').then(({ getSyncJob }) =>
-          getSyncJob(job_id)
-            .then(({ progress }) => {
-              if (!mountedRef.current) { es.close(); esRef.current = null; return; }
-              if (progress && ['done', 'error', 'canceled'].includes(progress.status)) {
-                es.close();
-                esRef.current = null;
-                if (mountedRef.current) { setSyncing(false); load(); }
-              }
-            })
-            .catch(() => { es.close(); esRef.current = null; if (mountedRef.current) setSyncing(false); })
-        );
-      };
+      subscribe(job_id);
     } catch (e) {
+      // 409: sudah ada sync berjalan → pantau job yang aktif, bukan error.
+      if (e?.response?.status === 409) {
+        try {
+          const a = await getActiveSyncJob();
+          if (a?.job_id) { subscribe(a.job_id); return; }
+        } catch { /* lanjut ke error */ }
+      }
       toast.error(e?.response?.data?.message || 'Gagal sinkronisasi');
       if (mountedRef.current) setSyncing(false);
     }

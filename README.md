@@ -20,6 +20,7 @@ Pengeluaran di luar email dicatat manual.
 ## Daftar Isi
 
 - [Tentang](#tentang)
+- [Tangkapan Layar](#tangkapan-layar)
 - [Fitur](#fitur)
 - [Arsitektur](#arsitektur)
 - [Tech Stack](#tech-stack)
@@ -61,6 +62,25 @@ shared wallet, OCR struk.
 
 ---
 
+## Tangkapan Layar
+
+<table>
+  <tr>
+    <th align="center">Beranda</th>
+    <th align="center">Laporan</th>
+    <th align="center">Akun</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/home.png" width="220" alt="Beranda — ringkasan pengeluaran bulan ini" /></td>
+    <td align="center"><img src="docs/report.png" width="220" alt="Laporan — tren dan per kategori" /></td>
+    <td align="center"><img src="docs/account.png" width="220" alt="Akun — koneksi Gmail dan pengaturan scan" /></td>
+  </tr>
+</table>
+
+<p align="center"><em>Ringkasan bulan ini, laporan tren & per kategori, dan pengaturan koneksi Gmail.</em></p>
+
+---
+
 ## Fitur
 
 **Auth & Onboarding**
@@ -69,8 +89,8 @@ shared wallet, OCR struk.
 - Putus koneksi Gmail kapan saja; hapus akun + seluruh data.
 
 **Email → Pengeluaran**
-- Pilih pengirim yang boleh dibaca (rekomendasi + "temukan pengirim" 90 hari terakhir).
-- Backfill dengan kontrol jendela (1 hari, 7 hari, bulan ini, 30/90 hari) & batas email.
+- Pilih pengirim yang boleh dibaca: rekomendasi bawaan atau tambah domain manual.
+- Backfill dengan kontrol jendela (1 hari, 7 hari, bulan ini, 30/90 hari, atau rentang tanggal kustom) & batas email 1–1000.
 - Sinkronisasi **manual** sebagai *job async* dengan progres real-time (SSE),
   bisa **jeda / lanjut / hentikan**, dan **persisten di DB** (aman antar-device).
 - Ekstraksi AI: nominal, merchant, waktu, referensi, sumber dana, kategori, catatan.
@@ -79,7 +99,7 @@ shared wallet, OCR struk.
 
 **Pencatatan Manual**
 - Quick-add (nominal format Rupiah, kategori, merchant, tanggal, catatan).
-- Edit/hapus/undo; pengeluaran berulang (langganan/cicilan).
+- Edit/hapus/undo dengan modal konfirmasi agar tidak salah tekan.
 
 **Kategori**
 - Kategori default Indonesia + custom; auto-kategori AI + rule hasil koreksi;
@@ -270,7 +290,7 @@ spendly/
 │   │   ├── identity/            # OAuth Google, sesi, koneksi Gmail
 │   │   ├── mailsync/            # sender, sync job async (SSE), clean, gate, redact
 │   │   ├── extraction/          # AI structured output, parse Go, dedup, review
-│   │   ├── ledger/              # transaksi, kategori, merchant, berulang
+│   │   ├── ledger/              # transaksi, kategori, merchant
 │   │   └── reporting/           # dashboard, laporan, CSV
 │   ├── provider/
 │   │   ├── gmail/               # client Gmail read-only
@@ -294,12 +314,11 @@ Endpoint data memerlukan sesi (cookie) + header CSRF untuk mutasi.
 |---|---|
 | Auth | `GET /auth/google/login`, `GET /auth/google/callback`, `GET /auth/me`, `POST /auth/logout` |
 | Gmail | `GET /gmail/connect`, `GET /auth/google/callback/gmail`, `GET/DELETE /gmail/connections`, `PATCH /gmail/connections/{id}` |
-| Sender | `GET /senders`, `PUT /senders`, `GET /senders/recommended`, `POST /senders/discover` |
+| Sender | `GET /senders`, `PUT /senders`, `GET /senders/recommended`, `POST /senders/registry`, `DELETE /senders/registry/{id}` |
 | Sync (job async) | `POST /gmail/sync`, `GET /gmail/sync/active`, `GET /gmail/sync/{id}`, `POST /gmail/sync/{id}/pause\|resume\|cancel`, `GET /gmail/sync/{id}/events` (SSE) |
 | Transaksi | `GET/POST /transactions`, `PATCH/DELETE /transactions/{id}`, `POST /transactions/{id}/restore`, `POST /transactions/{id}/merge` |
 | Review/Ignored | `GET /review-queue`, `POST /review-queue/{id}/confirm\|ignore`, `GET /ignored`, `POST /ignored/{id}/correct`, `POST /ignored/emails/{id}/reprocess` |
 | Kategori | `GET/POST /categories` |
-| Berulang | `GET/POST /recurring`, `DELETE /recurring/{id}`, `POST /recurring/{id}/book` |
 | Laporan | `GET /dashboard/summary`, `GET /reports/monthly`, `GET /export.csv` |
 | Ops | `GET /health/live`, `GET /health/ready`, `GET /version` |
 

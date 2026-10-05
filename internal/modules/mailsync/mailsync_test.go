@@ -97,6 +97,16 @@ func TestSenderDomain(t *testing.T) {
 	}
 }
 
+func TestWindowStartMonth(t *testing.T) {
+	now := time.Date(2026, 10, 5, 16, 30, 0, 0, time.Local)
+	if got, want := windowStart("month", now), time.Date(2026, 10, 1, 0, 0, 0, 0, time.Local); !got.Equal(want) {
+		t.Fatalf("month start = %v, mau %v", got, want)
+	}
+	if got := windowStart("7d", now); !got.Equal(now.AddDate(0, 0, -7)) {
+		t.Fatalf("7d start = %v", got)
+	}
+}
+
 func TestBuildQueryBefore(t *testing.T) {
 	after := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	got := buildQuery([]string{"bca.co.id", "gopay.co.id"}, after, time.Time{})
