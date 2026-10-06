@@ -4,15 +4,27 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } f
 import { Input } from '@/components/ui/input';
 import { addSenderRegistry } from '@/features/spendly/api';
 
+export const SENDER_CATEGORIES = [
+  'Banks',
+  'Digital Banks',
+  'E-Wallet',
+  'Payment / Fintech',
+  'Marketplace',
+  'Travel',
+  'Lainnya',
+];
+
 export default function AddSenderDrawer({ open, onOpenChange, onAdded }) {
   const [domain, setDomain] = useState('');
   const [label, setLabel] = useState('');
+  const [category, setCategory] = useState('Banks');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setDomain('');
     setLabel('');
+    setCategory('Banks');
   }, [open]);
 
   async function submit(e) {
@@ -24,7 +36,7 @@ export default function AddSenderDrawer({ open, onOpenChange, onAdded }) {
     }
     setSaving(true);
     try {
-      await addSenderRegistry(d, label.trim());
+      await addSenderRegistry(d, label.trim(), category);
       toast.success('Pengirim ditambahkan');
       onOpenChange(false);
       onAdded?.();
@@ -45,22 +57,44 @@ export default function AddSenderDrawer({ open, onOpenChange, onAdded }) {
         </DrawerHeader>
 
         <form onSubmit={submit} className="flex-1 space-y-4 overflow-y-auto px-4 pb-6 pt-4">
-          <div className="space-y-2">
-            <Input
-              value={domain}
-              onValueChange={setDomain}
-              placeholder="domain pengirim (mis. bca.co.id)"
-              aria-label="Domain pengirim"
-              autoFocus
-              className="h-11 font-mono"
-            />
-            <Input
-              value={label}
-              onValueChange={setLabel}
-              placeholder="Label (opsional)"
-              aria-label="Label pengirim"
-              className="h-11"
-            />
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-lichen">Kategori</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-forest-ink focus:outline-none focus:ring-1 focus:ring-forest-ink"
+              >
+                {SENDER_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-lichen">Domain pengirim</label>
+              <Input
+                value={domain}
+                onValueChange={setDomain}
+                placeholder="domain pengirim (mis. bca.co.id)"
+                aria-label="Domain pengirim"
+                autoFocus
+                className="h-11 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-lichen">Label (opsional)</label>
+              <Input
+                value={label}
+                onValueChange={setLabel}
+                placeholder="Label (opsional)"
+                aria-label="Label pengirim"
+                className="h-11"
+              />
+            </div>
           </div>
 
           <button

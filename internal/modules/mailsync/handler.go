@@ -68,11 +68,11 @@ func (h *Handler) listSenders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uid, _ := web.UserID(r.Context())
-	rows, err := h.svc.pool.Query(r.Context(), `SELECT g.id::text, g.domain, g.label, COALESCE(u.allowed,false),
+	rows, err := h.svc.pool.Query(r.Context(), `SELECT g.id::text, g.domain, g.label, COALESCE(g.category, 'Lainnya'), COALESCE(u.allowed,false),
 		g.is_seed, (g.created_by IS NOT NULL AND g.created_by::text=$2)
 		FROM sender_registry g
 		LEFT JOIN user_senders u ON u.sender_domain=g.domain AND u.connection_id=$1::uuid
-		WHERE g.enabled ORDER BY g.label`, id, uid)
+		WHERE g.enabled ORDER BY g.category, g.label`, id, uid)
 	if err != nil {
 		web.Error(w, r, err)
 		return
@@ -80,10 +80,10 @@ func (h *Handler) listSenders(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	items := []map[string]any{}
 	for rows.Next() {
-		var gid, d, l string
+		var gid, d, l, cat string
 		var a, seed, canDelete bool
-		if err := rows.Scan(&gid, &d, &l, &a, &seed, &canDelete); err == nil {
-			items = append(items, map[string]any{"id": gid, "domain": d, "label": l,
+		if err := rows.Scan(&gid, &d, &l, &cat, &a, &seed, &canDelete); err == nil {
+			items = append(items, map[string]any{"id": gid, "domain": d, "label": l, "category": cat,
 				"allowed": a, "is_seed": seed, "can_delete": canDelete})
 		}
 	}
@@ -92,15 +92,16 @@ func (h *Handler) listSenders(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) addSender(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Domain string `json:"domain"`
-		Label  string `json:"label"`
+		Domain   string `json:"domain"`
+		Label    string `json:"label"`
+		Category string `json:"category"`
 	}
 	if err := web.Decode(r, &req); err != nil {
 		web.Error(w, r, err)
 		return
 	}
 	uid, _ := web.UserID(r.Context())
-	item, err := h.svc.AddSender(r.Context(), uid, req.Domain, req.Label)
+	item, err := h.svc.AddSender(r.Context(), uid, req.Domain, req.Label, req.Category)
 	if err != nil {
 		web.Error(w, r, err)
 		return

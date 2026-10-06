@@ -541,26 +541,30 @@ func (s *Service) extractNew(ctx context.Context, connectionID string, gate func
 // ---- sender registry & status ----
 
 // AddSender menambah entri sender registry manual (is_seed=false) milik user.
-func (s *Service) AddSender(ctx context.Context, uid, domain, label string) (map[string]any, error) {
+func (s *Service) AddSender(ctx context.Context, uid, domain, label, category string) (map[string]any, error) {
 	domain = strings.ToLower(strings.TrimSpace(domain))
 	domain = strings.TrimSpace(strings.TrimPrefix(domain, "@"))
 	label = strings.TrimSpace(label)
+	category = strings.TrimSpace(category)
 	if domain == "" {
 		return nil, apperr.Invalid("domain pengirim wajib diisi")
 	}
 	if label == "" {
 		label = domain
 	}
-	var id, outDomain, outLabel string
-	err := s.pool.QueryRow(ctx, `INSERT INTO sender_registry (domain, label, is_seed, enabled, created_by)
-		VALUES ($1,$2,false,true,$3)
-		ON CONFLICT (domain) DO UPDATE SET label=EXCLUDED.label
-		WHERE sender_registry.created_by = $3
-		RETURNING id::text, domain, label`, domain, label, uid).Scan(&id, &outDomain, &outLabel)
+	if category == "" {
+		category = "Lainnya"
+	}
+	var id, outDomain, outLabel, outCategory string
+	err := s.pool.QueryRow(ctx, `INSERT INTO sender_registry (domain, label, category, is_seed, enabled, created_by)
+		VALUES ($1,$2,$3,false,true,$4)
+		ON CONFLICT (domain) DO UPDATE SET label=EXCLUDED.label, category=EXCLUDED.category
+		WHERE sender_registry.created_by = $4
+		RETURNING id::text, domain, label, category`, domain, label, category, uid).Scan(&id, &outDomain, &outLabel, &outCategory)
 	if err != nil {
 		return nil, apperr.Conflict("domain sudah terdaftar")
 	}
-	return map[string]any{"id": id, "domain": outDomain, "label": outLabel, "is_seed": false, "can_delete": true}, nil
+	return map[string]any{"id": id, "domain": outDomain, "label": outLabel, "category": outCategory, "is_seed": false, "can_delete": true}, nil
 }
 
 // DeleteSender menghapus entri manual milik user; seed / milik user lain ditolak.

@@ -100,8 +100,8 @@ export async function putSenders(connection_id, domains) {
   return data;
 }
 
-export async function addSenderRegistry(domain, label) {
-  const { data } = await client.post('/senders/registry', { domain, label });
+export async function addSenderRegistry(domain, label, category) {
+  const { data } = await client.post('/senders/registry', { domain, label, category });
   return data;
 }
 

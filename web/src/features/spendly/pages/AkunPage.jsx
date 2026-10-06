@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Mail, Trash2, LogOut, RefreshCw, Plus, ShieldCheck, Check,
-  Pause, Play, Square, Moon, Sun, User, SlidersHorizontal, History, ChevronRight, Download,
+  Pause, Play, Square, Moon, Sun, User, SlidersHorizontal, History, ChevronRight, Download, Search,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { getTheme, toggleTheme } from '@/lib/theme';
@@ -90,6 +90,7 @@ export default function AkunPage() {
   const [busy, setBusy] = useState('');
   const [conns, setConns] = useState([]);
   const [senders, setSenders] = useState([]);
+  const [senderSearch, setSenderSearch] = useState('');
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [senderOpen, setSenderOpen] = useState(false);
@@ -458,45 +459,105 @@ export default function AkunPage() {
                 <Plus className="h-3.5 w-3.5" /> Tambah pengirim
               </button>
 
-              {senders.length > 0 && (
-                <div className="pt-1">
-                  <p className="mb-2 flex items-center gap-1.5 font-mono text-[11px] font-medium tracking-wide text-saffron uppercase">
-                    <ShieldCheck className="h-3.5 w-3.5" /> Email yang dibaca
-                  </p>
-                  <div className="grid max-h-72 grid-cols-2 gap-2 overflow-y-auto pr-0.5 sm:grid-cols-3">
-                    {senders.map((s) => (
-                      <div key={s.domain} className="flex min-w-0 items-start gap-1.5 rounded-md border border-border bg-card p-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleSender(s.domain, s.allowed)}
-                          className="flex min-w-0 flex-1 items-start gap-2 text-left cursor-pointer"
-                        >
-                          <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border ${
-                            s.allowed ? 'border-forest-ink bg-forest-ink text-white' : 'border-border text-transparent'
-                          }`}>
-                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-xs font-medium text-forest-ink" title={s.label || s.domain}>{s.label || s.domain}</span>
-                            <span className="block truncate font-mono text-[10px] text-lichen" title={s.domain}>{s.domain}</span>
-                          </span>
-                        </button>
-                        {s.can_delete && (
-                          <button
-                            type="button"
-                            onClick={() => setPendingSender(s)}
-                            disabled={busy === `del:${s.id}`}
-                            aria-label="Hapus pengirim"
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 cursor-pointer"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
+              {senders.length > 0 && (() => {
+                const query = senderSearch.trim().toLowerCase();
+                const filtered = senders.filter((s) => {
+                  if (!query) return true;
+                  return (
+                    (s.label && s.label.toLowerCase().includes(query)) ||
+                    (s.domain && s.domain.toLowerCase().includes(query)) ||
+                    (s.category && s.category.toLowerCase().includes(query))
+                  );
+                });
+
+                // Group by category
+                const CATEGORY_ORDER = [
+                  'Banks',
+                  'Digital Banks',
+                  'E-Wallet',
+                  'Payment / Fintech',
+                  'Marketplace',
+                  'Travel',
+                  'Lainnya',
+                ];
+
+                const grouped = filtered.reduce((acc, s) => {
+                  const cat = s.category || 'Lainnya';
+                  if (!acc[cat]) acc[cat] = [];
+                  acc[cat].push(s);
+                  return acc;
+                }, {});
+
+                const categories = [
+                  ...CATEGORY_ORDER.filter((c) => grouped[c]),
+                  ...Object.keys(grouped).filter((c) => !CATEGORY_ORDER.includes(c)),
+                ];
+
+                return (
+                  <div className="pt-1 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-1.5 font-mono text-[11px] font-medium tracking-wide text-saffron uppercase">
+                        <ShieldCheck className="h-3.5 w-3.5" /> Email yang dibaca ({senders.filter((s) => s.allowed).length}/{senders.length})
+                      </p>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-lichen" />
+                      <Input
+                        value={senderSearch}
+                        onValueChange={setSenderSearch}
+                        placeholder="Cari pengirim atau domain…"
+                        aria-label="Cari pengirim"
+                        className="h-9 pl-8 text-xs"
+                      />
+                    </div>
+
+                    <div className="max-h-96 space-y-4 overflow-y-auto pr-0.5">
+                      {filtered.length === 0 ? (
+                        <p className="text-center text-xs text-lichen py-4">Tidak ada pengirim yang cocok dengan "{senderSearch}"</p>
+                      ) : (
+                        categories.map((cat) => (
+                          <div key={cat} className="space-y-1.5">
+                            <p className="font-heading text-xs font-semibold text-forest-ink/70 border-b border-border/50 pb-1">{cat}</p>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                              {grouped[cat].map((s) => (
+                                <div key={s.domain} className="flex min-w-0 items-start gap-1.5 rounded-md border border-border bg-card p-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleSender(s.domain, s.allowed)}
+                                    className="flex min-w-0 flex-1 items-start gap-2 text-left cursor-pointer"
+                                  >
+                                    <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border ${
+                                      s.allowed ? 'border-forest-ink bg-forest-ink text-white' : 'border-border text-transparent'
+                                    }`}>
+                                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate text-xs font-medium text-forest-ink" title={s.label || s.domain}>{s.label || s.domain}</span>
+                                      <span className="block truncate font-mono text-[10px] text-lichen" title={s.domain}>{s.domain}</span>
+                                    </span>
+                                  </button>
+                                  {s.can_delete && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPendingSender(s)}
+                                      disabled={busy === `del:${s.id}`}
+                                      aria-label="Hapus pengirim"
+                                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 cursor-pointer"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Pengaturan scan */}
               <div className="space-y-3 rounded-md border border-border p-3">
