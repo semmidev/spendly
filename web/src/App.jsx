@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'sonner';
 import { useAuthStore } from '@/features/auth/store';
 import TopLoadingBar from '@/components/TopLoadingBar';
+import LoadingPopup from '@/components/LoadingPopup';
 import MobileLayout from '@/components/MobileLayout';
 
 import Login from '@/features/auth/pages/Login';
@@ -14,21 +15,13 @@ const AkunPage = lazy(() => import('@/features/spendly/pages/AkunPage'));
 const SyncDetailPage = lazy(() => import('@/features/spendly/pages/SyncDetailPage'));
 
 function RouteFallback() {
-  return (
-    <div className="min-h-[40vh] flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  return <LoadingPopup show />;
 }
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuthStore();
   if (isLoading) {
-    return (
-      <div className="min-h-dvh bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <LoadingPopup show />;
   }
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return children;
@@ -37,11 +30,7 @@ function PrivateRoute({ children }) {
 function PublicRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuthStore();
   if (isLoading) {
-    return (
-      <div className="min-h-dvh bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <LoadingPopup show />;
   }
   if (isAuthenticated) return <Navigate to="/beranda" replace />;
   return children;
