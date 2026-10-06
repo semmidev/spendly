@@ -275,10 +275,17 @@ func (s *Service) runSync(ctx context.Context, uid, connectionID string, force b
 
 	// Pemulihan: email yang transaksinya dihapus manual dikembalikan ke antrean
 	// agar diekstrak ulang lalu diaktifkan kembali (CreateEmail restore + update).
-	if _, err := s.pool.Exec(ctx, `UPDATE raw_emails r SET status='fetched'
+	// Dibatasi ke jendela scan — hapus di luar jendela tidak ikut dipulihkan.
+	restoreQ := `UPDATE raw_emails r SET status='fetched'
 		WHERE r.connection_id=$1::uuid AND r.status <> 'fetched'
-		AND EXISTS (SELECT 1 FROM transactions t WHERE t.raw_email_id=r.id AND t.deleted_at IS NOT NULL)`,
-		connectionID); err != nil {
+		AND r.received_at >= $2
+		AND EXISTS (SELECT 1 FROM transactions t WHERE t.raw_email_id=r.id AND t.deleted_at IS NOT NULL)`
+	restoreArgs := []any{connectionID, after}
+	if !before.IsZero() {
+		restoreQ += ` AND r.received_at < $3`
+		restoreArgs = append(restoreArgs, before)
+	}
+	if _, err := s.pool.Exec(ctx, restoreQ, restoreArgs...); err != nil {
 		slog.Warn("gagal reset raw_emails terhapus", "conn", shortID(connectionID), "error", err)
 	}
 

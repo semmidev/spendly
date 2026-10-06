@@ -182,6 +182,46 @@ func TestSyncJobCancel(t *testing.T) {
 	}
 }
 
+// TestRestoreScopedToWindow: sync dengan window 1d hanya memulihkan email yang
+// transaksinya dihapus di dalam jendela; email lama di luar jendela tetap dibiarkan.
+func TestRestoreScopedToWindow(t *testing.T) {
+	svc, uid, connID := setupJobTest(t)
+	ctx := context.Background()
+
+	if _, err := svc.pool.Exec(ctx, `UPDATE gmail_connections SET scan_window='1d' WHERE id=$1::uuid`, connID); err != nil {
+		t.Fatalf("set window: %v", err)
+	}
+	mkDeleted := func(gmailID string, ageHours int) {
+		var raw string
+		if err := svc.pool.QueryRow(ctx, `INSERT INTO raw_emails (connection_id, gmail_message_id, content_hash, status, received_at)
+			VALUES ($1::uuid,$2,$3,'extracted',now() - make_interval(hours => $4)) RETURNING id::text`,
+			connID, gmailID, "hash-"+gmailID, ageHours).Scan(&raw); err != nil {
+			t.Fatalf("insert raw %s: %v", gmailID, err)
+		}
+		if _, err := svc.pool.Exec(ctx, `INSERT INTO transactions (user_id, amount, occurred_at, raw_email_id, fingerprint, deleted_at)
+			VALUES ($1,1000,now(),$2::uuid,$3,now())`, uid, raw, "fp-"+gmailID); err != nil {
+			t.Fatalf("insert tx %s: %v", gmailID, err)
+		}
+	}
+	mkDeleted("gwin", 2)   // 2 jam lalu → dalam jendela 1d
+	mkDeleted("gout", 240) // 10 hari lalu → di luar jendela
+
+	if _, err := svc.runSync(ctx, uid, connID, true, 0, func() error { return nil }, func(Progress) {}); err != nil {
+		t.Fatalf("runSync: %v", err)
+	}
+	status := func(id string) string {
+		var s string
+		_ = svc.pool.QueryRow(ctx, `SELECT status FROM raw_emails WHERE connection_id=$1::uuid AND gmail_message_id=$2`, connID, id).Scan(&s)
+		return s
+	}
+	if status("gwin") != "fetched" {
+		t.Fatalf("email dalam jendela tidak dipulihkan: status=%s", status("gwin"))
+	}
+	if status("gout") != "extracted" {
+		t.Fatalf("email di luar jendela ikut dipulihkan: status=%s", status("gout"))
+	}
+}
+
 // TestRecoverStaleJobs: baris tertinggal ditandai error saat startup.
 func TestRecoverStaleJobs(t *testing.T) {
 	svc, uid, connID := setupJobTest(t)
