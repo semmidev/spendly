@@ -9,7 +9,7 @@ BUN_CMD ?= $(shell command -v bun 2>/dev/null || echo "$(HOME)/.bun/bin/bun")
 DOCKER_COMPOSE ?= $(shell command -v docker-compose 2>/dev/null || echo "docker compose")
 GO_TEST_PKGS = $(shell go list ./... | grep -v '/node_modules/')
 
-.PHONY: build build-frontend run dev test test-pg lint fmt tidy clean db-up db-down
+.PHONY: build build-frontend run dev test test-pg lint fmt tidy clean db-up db-down preview
 
 ## Build React SPA dan salin ke direktori embed Go.
 build-frontend:
@@ -61,3 +61,24 @@ db-up:
 
 db-down:
 	$(DOCKER_COMPOSE) down
+
+## Generate ulang preview README (mockup iPhone) ke docs/preview/.
+## Butuh Postgres lokal menyala (make db-up). Data lokal tidak tersentuh:
+## memakai database + API sementara (port 8901, tanpa OAuth).
+PREVIEW_PORT ?= 8901
+PREVIEW_DB_URL = postgres://spendly:spendly@localhost:5432/spendly_preview?sslmode=disable
+PREVIEW_PG ?= spendly-postgres-1
+
+preview:
+	@echo "📸 Generate preview README…"
+	@docker exec $(PREVIEW_PG) psql -U spendly -c "DROP DATABASE IF EXISTS spendly_preview" >/dev/null
+	@docker exec $(PREVIEW_PG) psql -U spendly -c "CREATE DATABASE spendly_preview" >/dev/null
+	@go build -o /tmp/spendly-preview-api ./cmd/api
+	@(GOOGLE_CLIENT_ID= GOOGLE_CLIENT_SECRET= APP_ENV=development DATABASE_URL="$(PREVIEW_DB_URL)" APP_PORT=$(PREVIEW_PORT) /tmp/spendly-preview-api > /tmp/spendly-preview-api.log 2>&1 & echo $$! > /tmp/spendly-preview-api.pid)
+	@for i in $$(seq 1 30); do curl -sf http://localhost:$(PREVIEW_PORT)/ >/dev/null && break || sleep 2; done
+	@cd web && $(BUN_CMD) run preview:shots --base http://localhost:$(PREVIEW_PORT); STATUS=$$?; \
+		kill $$(cat /tmp/spendly-preview-api.pid) 2>/dev/null || true; \
+		sleep 2; \
+		rm -f /tmp/spendly-preview-api /tmp/spendly-preview-api.pid; \
+		docker exec $(PREVIEW_PG) psql -U spendly -c "DROP DATABASE IF EXISTS spendly_preview" >/dev/null; \
+		exit $$STATUS

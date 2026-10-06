@@ -21,14 +21,14 @@ Pengeluaran di luar email dicatat manual.
 
 <table width="100%">
   <tr>
-    <td align="center" width="50%"><img src="docs/home.png" width="100%" alt="Beranda — ringkasan pengeluaran bulan ini" /><br/><sub>Beranda</sub></td>
-    <td align="center" width="50%"><img src="docs/transaction.png" width="100%" alt="Transaksi — daftar transaksi dengan filter dan sumber dana" /><br/><sub>Transaksi</sub></td>
-  </tr>
-  <tr>
-    <td align="center" width="50%"><img src="docs/report.png" width="100%" alt="Laporan — tren dan per kategori" /><br/><sub>Laporan</sub></td>
-    <td align="center" width="50%"><img src="docs/account.png" width="100%" alt="Akun — koneksi Gmail dan pengaturan scan" /><br/><sub>Akun</sub></td>
+    <td align="center" width="25%"><img src="docs/preview/beranda.png" width="240" alt="Beranda — ringkasan pengeluaran bulan ini" /><br/><sub>Beranda</sub></td>
+    <td align="center" width="25%"><img src="docs/preview/transaksi.png" width="240" alt="Transaksi — daftar transaksi dengan filter dan tab" /><br/><sub>Transaksi</sub></td>
+    <td align="center" width="25%"><img src="docs/preview/laporan.png" width="240" alt="Laporan — tren dan per kategori" /><br/><sub>Laporan</sub></td>
+    <td align="center" width="25%"><img src="docs/preview/akun.png" width="240" alt="Akun — profil, tampilan, dan pengaturan" /><br/><sub>Akun</sub></td>
   </tr>
 </table>
+
+> Preview dibuat otomatis: `cd web && bun run preview:shots` (lihat `web/scripts/preview-shots.mjs`).
 
 ---
 
@@ -335,6 +335,7 @@ Endpoint data memerlukan sesi (cookie) + header CSRF untuk mutasi.
 | `make tidy` | `go mod tidy` |
 | `make db-up` / `make db-down` | Nyalakan/hentikan PostgreSQL lokal |
 | `make clean` | Bersihkan `bin/` dan dist |
+| `make preview` | Generate ulang preview README (`docs/preview/`, butuh Postgres lokal) |
 
 ---
 
