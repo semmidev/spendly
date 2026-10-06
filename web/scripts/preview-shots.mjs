@@ -9,10 +9,11 @@
 //
 // Hasil: docs/preview/{beranda,transaksi,laporan,akun}.png (transparan, siap README).
 // Data demo di-seed otomatis bila transaksi masih kosong (idempoten).
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 import { chromium } from 'playwright-core';
 
 const args = Object.fromEntries(
@@ -111,18 +112,78 @@ if ((list?.meta?.total ?? 0) === 0) {
     if (!r.ok()) throw new Error(`seed gagal: ${await r.text()}`);
   }
   console.log('seed: 8 transaksi demo');
+
+  try {
+    const pgContainer = process.env.PREVIEW_PG || 'spendly-postgres-1';
+    const sql = `
+      DO $$
+      DECLARE
+        v_uid uuid;
+        v_conn_id uuid;
+      BEGIN
+        SELECT id INTO v_uid FROM users WHERE google_sub = 'dev' LIMIT 1;
+        IF v_uid IS NOT NULL THEN
+          INSERT INTO gmail_connections (id, user_id, google_email, enc_refresh_token, status)
+          VALUES ('11111111-1111-1111-1111-111111111111', v_uid, 'dev@spendly.local', 'enc_dummy', 'active')
+          ON CONFLICT DO NOTHING;
+
+          v_conn_id := '11111111-1111-1111-1111-111111111111';
+
+          INSERT INTO senders (connection_id, email_domain, name, is_active)
+          VALUES 
+            (v_conn_id, 'bca.co.id', 'Bank BCA', true),
+            (v_conn_id, 'gofood.co.id', 'GoFood', true),
+            (v_conn_id, 'tokopedia.com', 'Tokopedia', true)
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO raw_emails (id, connection_id, gmail_message_id, content_hash, status, subject, sender_domain, received_at)
+          VALUES ('22222222-2222-2222-2222-222222222222', v_conn_id, 'msg-review-1', 'hash-rev-1', 'parsed', 'Struk Pembayaran BCA Mobile', 'bca.co.id', NOW() - INTERVAL '1 day')
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO transactions (user_id, amount, currency, category, merchant, note, occurred_at, source, raw_email_id, status, confidence)
+          VALUES (v_uid, 125000, 'IDR', 'Tagihan', 'BCA Mobile', 'Tagihan Kartu Kredit', NOW() - INTERVAL '1 day', 'email', '22222222-2222-2222-2222-222222222222', 'needs_review', 0.72)
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO raw_emails (id, connection_id, gmail_message_id, content_hash, status, subject, sender_domain, ignore_reason, received_at)
+          VALUES ('33333333-3333-3333-3333-333333333333', v_conn_id, 'msg-ignored-1', 'hash-ign-1', 'gated_out', 'Promo Tokopedia Flash Sale', 'tokopedia.com', 'promo', NOW() - INTERVAL '2 days')
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO transactions (user_id, amount, currency, category, merchant, note, occurred_at, source, status)
+          VALUES (v_uid, 45000, 'IDR', 'Makanan', 'Starbucks', 'Kopi salah beli', NOW() - INTERVAL '3 days', 'manual', 'deleted')
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO sync_jobs (id, connection_id, user_id, status, mode, scan_window, emails_total, emails_new, emails_gated, emails_extracted, created_at, finished_at)
+          VALUES ('44444444-4444-4444-4444-444444444444', v_conn_id, v_uid, 'done', 'backfill', '30d', 150, 42, 12, 30, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour 58 mins')
+          ON CONFLICT DO NOTHING;
+        END IF;
+      END $$;
+    `;
+    execSync(`docker exec -i ${pgContainer} psql -U spendly -d spendly_preview`, { input: sql, stdio: ['pipe', 'ignore', 'ignore'] });
+    console.log('seed: data tambahan (tinjau, diabaikan, sampah, sinkron, riwayat)');
+  } catch (e) {
+    console.warn('seed SQL ekstra dilewati:', e.message);
+  }
 } else {
   console.log('seed: dilewati (sudah ada data)');
 }
 
 const tmp = await mkdtemp(join(tmpdir(), 'spendly-shots-'));
 const shots = [];
-for (const [name, path] of [
+const TARGET_SHOTS = [
   ['beranda', '/beranda'],
-  ['transaksi', '/transaksi'],
-  ['laporan', '/laporan'],
-  ['akun', '/akun'],
-]) {
+  ['transaksi-semua', '/transaksi?tab=all'],
+  ['transaksi-tinjau', '/transaksi?tab=review'],
+  ['transaksi-diabaikan', '/transaksi?tab=ignored'],
+  ['transaksi-sampah', '/transaksi?tab=trash'],
+  ['laporan-harian', '/laporan?period=daily'],
+  ['laporan-bulanan', '/laporan?period=monthly'],
+  ['laporan-tahunan', '/laporan?period=yearly'],
+  ['akun-profil', '/akun?tab=akun'],
+  ['akun-sinkron', '/akun?tab=sinkron'],
+  ['akun-riwayat', '/akun?tab=riwayat'],
+];
+
+for (const [name, path] of TARGET_SHOTS) {
   const page = await ctx.newPage();
   await page.goto(BASE + path, { waitUntil: 'networkidle' });
   await page.waitForTimeout(2000); // chart + skeleton selesai animasi
@@ -151,6 +212,12 @@ for (const [name, file] of shots) {
   console.log('framed:', name);
 }
 
+// Aliases untuk backward compatibility
+await copyFile(join(OUT, 'transaksi-semua.png'), join(OUT, 'transaksi.png'));
+await copyFile(join(OUT, 'laporan-harian.png'), join(OUT, 'laporan.png'));
+await copyFile(join(OUT, 'akun-profil.png'), join(OUT, 'akun.png'));
+
 await browser.close();
 await rm(tmp, { recursive: true, force: true });
 console.log('selesai →', OUT);
+

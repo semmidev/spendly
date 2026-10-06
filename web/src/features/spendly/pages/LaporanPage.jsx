@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { Download, Copy, TrendingUp, TrendingDown } from 'lucide-react';
@@ -53,11 +54,22 @@ function MonthPicker({ value, years, onChange }) {
 }
 
 export default function LaporanPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('daily');
+  const [period, setPeriod] = useState(() => {
+    const p = searchParams.get('period');
+    return PERIODS.some((x) => x.id === p) ? p : 'daily';
+  });
   const [month, setMonth] = useState(nowMonth);
   const [year, setYear] = useState(() => String(new Date().getFullYear()));
+
+  useEffect(() => {
+    const p = searchParams.get('period');
+    if (p && PERIODS.some((x) => x.id === p) && p !== period) {
+      setPeriod(p);
+    }
+  }, [searchParams, period]);
 
   useEffect(() => {
     let mounted = true;
@@ -72,6 +84,11 @@ export default function LaporanPage() {
     })();
     return () => { mounted = false; };
   }, [period, month, year]);
+
+  function handlePeriodChange(pId) {
+    setPeriod(pId);
+    setSearchParams({ period: pId }, { replace: true });
+  }
 
   function exportCsv() {
     window.location.href = '/api/v1/export.csv';
@@ -103,7 +120,7 @@ export default function LaporanPage() {
 
       <div className="flex flex-wrap gap-2">
         {PERIODS.map((p) => (
-          <Chip key={p.id} active={period === p.id} onClick={() => setPeriod(p.id)}>{p.title}</Chip>
+          <Chip key={p.id} active={period === p.id} onClick={() => handlePeriodChange(p.id)}>{p.title}</Chip>
         ))}
       </div>
 

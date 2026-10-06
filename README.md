@@ -19,16 +19,39 @@ Pengeluaran di luar email dicatat manual.
 
 ## Tangkapan Layar
 
+### Beranda & Transaksi
 <table width="100%">
   <tr>
-    <td align="center" width="25%"><img src="docs/preview/beranda.png" width="240" alt="Beranda — ringkasan pengeluaran bulan ini" /><br/><sub>Beranda</sub></td>
-    <td align="center" width="25%"><img src="docs/preview/transaksi.png" width="240" alt="Transaksi — daftar transaksi dengan filter dan tab" /><br/><sub>Transaksi</sub></td>
-    <td align="center" width="25%"><img src="docs/preview/laporan.png" width="240" alt="Laporan — tren dan per kategori" /><br/><sub>Laporan</sub></td>
-    <td align="center" width="25%"><img src="docs/preview/akun.png" width="240" alt="Akun — profil, tampilan, dan pengaturan" /><br/><sub>Akun</sub></td>
+    <td align="center" width="50%"><img src="docs/preview/beranda.png" width="220" alt="Beranda — Ringkasan" /><br/><sub>Beranda</sub></td>
+    <td align="center" width="50%"><img src="docs/preview/transaksi-semua.png" width="220" alt="Transaksi — Semua" /><br/><sub>Transaksi: Semua</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="50%"><img src="docs/preview/transaksi-tinjau.png" width="220" alt="Transaksi — Tinjau" /><br/><sub>Transaksi: Tinjau</sub></td>
+    <td align="center" width="50%"><img src="docs/preview/transaksi-diabaikan.png" width="220" alt="Transaksi — Diabaikan" /><br/><sub>Transaksi: Diabaikan</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="50%"><img src="docs/preview/transaksi-sampah.png" width="220" alt="Transaksi — Sampah" /><br/><sub>Transaksi: Sampah</sub></td>
+    <td align="center" width="50%"></td>
   </tr>
 </table>
 
-> Preview dibuat otomatis: `cd web && bun run preview:shots` (lihat `web/scripts/preview-shots.mjs`).
+### Laporan & Akun
+<table width="100%">
+  <tr>
+    <td align="center" width="50%"><img src="docs/preview/laporan-harian.png" width="220" alt="Laporan — Harian" /><br/><sub>Laporan: Harian</sub></td>
+    <td align="center" width="50%"><img src="docs/preview/laporan-bulanan.png" width="220" alt="Laporan — Bulanan" /><br/><sub>Laporan: Bulanan</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="50%"><img src="docs/preview/laporan-tahunan.png" width="220" alt="Laporan — Tahunan" /><br/><sub>Laporan: Tahunan</sub></td>
+    <td align="center" width="50%"><img src="docs/preview/akun-profil.png" width="220" alt="Akun — Profil & Tampilan" /><br/><sub>Akun: Profil</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="50%"><img src="docs/preview/akun-sinkron.png" width="220" alt="Akun — Sinkronisasi Gmail" /><br/><sub>Akun: Sinkron</sub></td>
+    <td align="center" width="50%"><img src="docs/preview/akun-riwayat.png" width="220" alt="Akun — Riwayat Job Sync" /><br/><sub>Akun: Riwayat</sub></td>
+  </tr>
+</table>
+
+> Tangkapan layar dibuat otomatis via `make preview` (lihat [preview-shots.mjs](web/scripts/preview-shots.mjs)).
 
 ---
 
