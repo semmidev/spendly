@@ -116,7 +116,10 @@ func (s *Service) StartSyncJob(ctx context.Context, uid, connectionID string, fo
 			existing.mu.Lock()
 			st := existing.progress.Status
 			existing.mu.Unlock()
-			if st == "running" {
+			// Blok selama job lama belum benar-benar berhenti (running/paused/
+			// canceling); kalau tidak, dua job bisa jalan bersamaan untuk
+			// koneksi yang sama.
+			if st == "running" || st == "paused" || st == "canceling" {
 				m.mu.Unlock()
 				return "", apperr.Conflict("sinkronisasi sedang berjalan untuk koneksi ini")
 			}
@@ -159,6 +162,9 @@ func (s *Service) runJob(ctx context.Context, j *job) {
 		j.progress.New = p.New
 		j.progress.Gated = p.Gated
 		j.progress.Current = p.Current
+		if p.Extracted > 0 {
+			j.progress.Extracted = p.Extracted
+		}
 		if p.Message != "" {
 			j.progress.Message = p.Message
 		}

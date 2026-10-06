@@ -3,16 +3,33 @@ package mailsync
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	gmailapi "google.golang.org/api/gmail/v1"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/semmidev/spendly/internal/platform/config"
 	"github.com/semmidev/spendly/internal/platform/security"
 	"github.com/semmidev/spendly/internal/testutil"
 )
+
+// stubExtractor: menandai raw selesai ('parsed') atau gagal sesuai failOn.
+type stubExtractor struct {
+	pool   *pgxpool.Pool
+	failOn map[string]bool
+}
+
+func (e *stubExtractor) ProcessRaw(ctx context.Context, rawID string) error {
+	if e.failOn[rawID] {
+		return fmt.Errorf("boom %s", rawID)
+	}
+	_, err := e.pool.Exec(ctx, `UPDATE raw_emails SET status='parsed' WHERE id=$1::uuid`, rawID)
+	return err
+}
 
 // stubGmail: klien Gmail palsu yang lambat agar job sempat di-pause/cancel.
 type stubGmail struct {
@@ -219,6 +236,48 @@ func TestRestoreScopedToWindow(t *testing.T) {
 	}
 	if status("gout") != "extracted" {
 		t.Fatalf("email di luar jendela ikut dipulihkan: status=%s", status("gout"))
+	}
+}
+
+// TestExtractNewDrainsAllAndLogsError: extractNew memproses SEMUA email
+// 'fetched' (lebih dari satu batch), mencatat error item ke kolom error, dan
+// tidak menggantung walau satu item gagal.
+func TestExtractNewDrainsAllAndLogsError(t *testing.T) {
+	svc, _, connID := setupJobTest(t)
+	ctx := context.Background()
+	ex := &stubExtractor{pool: svc.pool, failOn: map[string]bool{}}
+	svc.Extract = ex
+
+	const n = 30
+	var failID string
+	for i := 0; i < n; i++ {
+		var id string
+		if err := svc.pool.QueryRow(ctx, `INSERT INTO raw_emails (connection_id, gmail_message_id, content_hash, status, received_at)
+			VALUES ($1::uuid,$2,$3,'fetched',now() - make_interval(secs => $4)) RETURNING id::text`,
+			connID, fmt.Sprintf("drain-%d", i), fmt.Sprintf("h-%d", i), i).Scan(&id); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+		if i == 0 {
+			failID = id
+		}
+	}
+	ex.failOn[failID] = true
+
+	got, err := svc.extractNew(ctx, connID, func() error { return nil }, func(Progress) {})
+	if err != nil {
+		t.Fatalf("extractNew: %v", err)
+	}
+	if got != n-1 {
+		t.Fatalf("sukses=%d mau %d", got, n-1)
+	}
+	var remaining, failed int
+	_ = svc.pool.QueryRow(ctx, `SELECT COUNT(*) FROM raw_emails WHERE connection_id=$1::uuid AND status='fetched'`, connID).Scan(&remaining)
+	_ = svc.pool.QueryRow(ctx, `SELECT COUNT(*) FROM raw_emails WHERE id=$1::uuid AND status='failed' AND error IS NOT NULL`, failID).Scan(&failed)
+	if remaining != 0 {
+		t.Fatalf("sisa fetched=%d mau 0", remaining)
+	}
+	if failed != 1 {
+		t.Fatalf("item gagal tidak tercatat dengan error: %d", failed)
 	}
 }
 

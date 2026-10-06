@@ -289,13 +289,14 @@ func (s *Service) runSync(ctx context.Context, uid, connectionID string, force b
 		slog.Warn("gagal reset raw_emails terhapus", "conn", shortID(connectionID), "error", err)
 	}
 
-	// ekstraksi inline terbatas; ikut batas scan
+	// ekstraksi: proses SEMUA email berstatus 'fetched' sampai habis agar sync
+	// tamat dalam satu sesi; berhenti hanya bila dijeda/dibatalkan (gate).
 	if s.Extract != nil {
-		batch := limit
-		if batch <= 0 || batch > 25 {
-			batch = 25
+		n, xerr := s.extractNew(ctx, connectionID, gate, report)
+		st.Extracted = n
+		if xerr != nil {
+			return st, xerr
 		}
-		st.Extracted = s.extractNew(ctx, connectionID, batch)
 	}
 	slog.Info("sync selesai",
 		"conn", shortID(connectionID), "mode", mode,
@@ -379,10 +380,9 @@ func (s *Service) incremental(ctx context.Context, client gmailClient, connectio
 	}
 	st.Listed = len(ids)
 	processed := 0
+	// Proses SEMUA id baru sejak cursor; limit scan hanya membatasi backfill.
+	// Bila limit diterapkan di sini, cursor tetap maju dan email berlebih hilang.
 	for _, id := range ids {
-		if limit > 0 && processed >= limit {
-			break
-		}
 		if err := gate(); err != nil {
 			return st, err
 		}
@@ -415,6 +415,7 @@ func (s *Service) processOne(ctx context.Context, client gmailClient, connection
 	msg, err := client.Get(ctx, gmailID)
 	if err != nil {
 		slog.Warn("gagal ambil email", "conn", shortID(connectionID), "gmail_id", gmailID, "error", err)
+		s.recordItemError(ctx, connectionID, gmailID, "ambil email: "+err.Error())
 		return false, false, "", ""
 	}
 	c := CleanMessage(msg)
@@ -428,7 +429,9 @@ func (s *Service) processOne(ctx context.Context, client gmailClient, connection
 	var inserted bool
 	err = s.pool.QueryRow(ctx, `INSERT INTO raw_emails (connection_id, gmail_message_id, content_hash, status, parser_version, received_at, subject, sender_domain)
 		VALUES ($1::uuid,$2,$3,'fetched','v1',$4,$5,$6)
-		ON CONFLICT (connection_id, gmail_message_id) DO NOTHING
+		ON CONFLICT (connection_id, gmail_message_id) DO UPDATE
+			SET status='fetched', error=NULL
+			WHERE raw_emails.status='failed'
 		RETURNING true`, connectionID, gmailID, ch, nullTime(c.InternalDate), c.Subject, dom).Scan(&inserted)
 	if err != nil || !inserted {
 		slog.Debug("email duplikat dilewati", "conn", shortID(connectionID), "sender", dom, "gmail_id", gmailID)
@@ -446,6 +449,18 @@ func (s *Service) processOne(ctx context.Context, client gmailClient, connection
 		"conn", shortID(connectionID), "sender", dom,
 		"subject", truncate(c.Subject, 90), "received", c.InternalDate.Format("2006-01-02 15:04"))
 	return true, false, dom, c.Subject
+}
+
+// recordItemError menyimpan kegagalan ambil email sebagai baris raw_emails
+// 'failed' + pesan error, agar tampil di log detail & bisa diproses ulang.
+// Baris yang sudah selesai (parsed/needs_review/dll) tidak ditimpa.
+func (s *Service) recordItemError(ctx context.Context, connectionID, gmailID, msg string) {
+	h := sha256.Sum256([]byte(gmailID))
+	_, _ = s.pool.Exec(ctx, `INSERT INTO raw_emails (connection_id, gmail_message_id, content_hash, status, parser_version, error)
+		VALUES ($1::uuid,$2,$3,'failed','v1',$4)
+		ON CONFLICT (connection_id, gmail_message_id) DO UPDATE SET status='failed', error=EXCLUDED.error
+		WHERE raw_emails.status IN ('fetched','failed')`,
+		connectionID, gmailID, hex.EncodeToString(h[:]), truncate(msg, 300))
 }
 
 // headerFrom mengambil header From tanpa menyentuh body (untuk filter
@@ -477,27 +492,50 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
-func (s *Service) extractNew(ctx context.Context, connectionID string, limit int) int {
+// extractNew memproses semua raw_emails berstatus 'fetched' dalam batch berulang
+// sampai habis (atau gate minta berhenti). Error ekstraksi per-item dicatat ke
+// raw_emails.error + status 'failed' agar sync tidak ikut berhenti dan bisa
+// diproses ulang user. Return jumlah item sukses.
+func (s *Service) extractNew(ctx context.Context, connectionID string, gate func() error, report func(Progress)) (int, error) {
 	if s.Extract == nil {
-		return 0
+		return 0, nil
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id::text FROM raw_emails
-		WHERE connection_id=$1::uuid AND status='fetched' ORDER BY received_at DESC LIMIT $2`, connectionID, limit)
-	if err != nil {
-		return 0
-	}
-	defer rows.Close()
-	n := 0
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			continue
+	const batch = 25
+	total := 0
+	for {
+		if err := gate(); err != nil {
+			return total, err
 		}
-		if err := s.Extract.ProcessRaw(ctx, id); err == nil {
-			n++
+		rows, err := s.pool.Query(ctx, `SELECT id::text FROM raw_emails
+			WHERE connection_id=$1::uuid AND status='fetched' ORDER BY received_at DESC NULLS LAST LIMIT $2`, connectionID, batch)
+		if err != nil {
+			return total, err
+		}
+		var ids []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err == nil {
+				ids = append(ids, id)
+			}
+		}
+		rows.Close()
+		if len(ids) == 0 {
+			return total, nil
+		}
+		for _, id := range ids {
+			if err := gate(); err != nil {
+				return total, err
+			}
+			if err := s.Extract.ProcessRaw(ctx, id); err != nil {
+				slog.Warn("ekstraksi item gagal", "raw", shortID(id), "error", err)
+				_, _ = s.pool.Exec(ctx, `UPDATE raw_emails SET status='failed', error=$2
+					WHERE id=$1::uuid AND status IN ('fetched','extracting')`, id, truncate(err.Error(), 300))
+				continue
+			}
+			total++
+			report(Progress{Status: "running", Extracted: total})
 		}
 	}
-	return n
 }
 
 // ---- sender registry & status ----
@@ -630,7 +668,7 @@ func (s *Service) SyncDetail(ctx context.Context, uid, jobID string) (map[string
 	if finished != nil {
 		end = *finished
 	}
-	rows, err := s.pool.Query(ctx, `SELECT r.subject, r.sender_domain, r.status, r.ignore_reason, r.received_at,
+	rows, err := s.pool.Query(ctx, `SELECT r.subject, r.sender_domain, r.status, r.ignore_reason, r.error, r.received_at,
 		t.amount, t.currency, m.canonical_name, c.name, e.confidence
 		FROM raw_emails r
 		LEFT JOIN transactions t ON t.raw_email_id=r.id AND t.deleted_at IS NULL
@@ -643,16 +681,16 @@ func (s *Service) SyncDetail(ctx context.Context, uid, jobID string) (map[string
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
-			var subject, domain, st, reason, merchant, cat, curr *string
+			var subject, domain, st, reason, errMsg, merchant, cat, curr *string
 			var received *time.Time
 			var amount *int64
 			var conf *float64
-			if err := rows.Scan(&subject, &domain, &st, &reason, &received, &amount, &curr, &merchant, &cat, &conf); err != nil {
+			if err := rows.Scan(&subject, &domain, &st, &reason, &errMsg, &received, &amount, &curr, &merchant, &cat, &conf); err != nil {
 				continue
 			}
 			e := map[string]any{
 				"subject": strVal(subject), "sender_domain": strVal(domain), "status": strVal(st),
-				"ignore_reason": strVal(reason), "received_at": received,
+				"ignore_reason": strVal(reason), "error": strVal(errMsg), "received_at": received,
 			}
 			if amount != nil {
 				e["transaction"] = map[string]any{

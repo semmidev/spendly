@@ -186,6 +186,7 @@ func TestReenableDeletedWithoutAI(t *testing.T) {
 	}
 	if _, err := pool.Exec(ctx, `UPDATE raw_emails r SET status='fetched'
 		WHERE r.connection_id=$1::uuid AND r.status <> 'fetched'
+		AND r.received_at >= now() - interval '30 days'
 		AND EXISTS (SELECT 1 FROM transactions t WHERE t.raw_email_id=r.id AND t.deleted_at IS NOT NULL)`, connID); err != nil {
 		t.Fatalf("reset: %v", err)
 	}

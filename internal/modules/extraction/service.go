@@ -46,7 +46,7 @@ func (s *Service) ProcessRaw(ctx context.Context, rawID string) error {
 	if err != nil {
 		return err // bukan fetched / tidak ada → lewati
 	}
-	_, _ = s.pool.Exec(ctx, `UPDATE raw_emails SET status='extracting' WHERE id=$1::uuid`, rawID)
+	_, _ = s.pool.Exec(ctx, `UPDATE raw_emails SET status='extracting', error=NULL WHERE id=$1::uuid`, rawID)
 
 	fetch := s.fetchText
 	if fetch == nil {
@@ -79,6 +79,11 @@ func (s *Service) ProcessRaw(ctx context.Context, rawID string) error {
 				"tokens_in", u.TokensIn, "tokens_out", u.TokensOut, "cost", u.Cost, "latency_ms", u.LatencyMs)
 		} else {
 			slog.Warn("AI gagal, pakai parser lokal", "raw", shortID(rawID), "error", err)
+			// catat error AI di raw_emails.error agar bisa dilihat di log detail.
+			// Timeout 40s dihitung error AI; pembatalan sync (ctx) dilewati.
+			if ctx.Err() == nil {
+				s.setError(ctx, rawID, "AI: "+err.Error())
+			}
 			res = FallbackExtract(from, subject, text)
 		}
 	} else {
@@ -208,6 +213,12 @@ func (s *Service) fail(ctx context.Context, rawID, msg string) error {
 	msg = truncate(msg, 300)
 	_, _ = s.pool.Exec(ctx, `UPDATE raw_emails SET status='failed', ignore_reason=$2, error=$2 WHERE id=$1::uuid`, rawID, msg)
 	return nil
+}
+
+// setError menyimpan log error tanpa mengubah status (mis. AI gagal lalu
+// fallback parser lokal tetap dipakai).
+func (s *Service) setError(ctx context.Context, rawID, msg string) {
+	_, _ = s.pool.Exec(ctx, `UPDATE raw_emails SET error=$2 WHERE id=$1::uuid`, rawID, truncate(msg, 300))
 }
 
 func saveExtraction(ctx context.Context, pool *pgxpool.Pool, rawID string, res llm.Result, u llm.Usage, fromCache bool) {

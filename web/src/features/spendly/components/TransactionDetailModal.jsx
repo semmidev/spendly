@@ -155,6 +155,13 @@ export function EmailDetailModal({ email, onClose, onReprocess }) {
             ))}
           </dl>
 
+          {email.error && (
+            <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2">
+              <p className="text-[11px] font-medium text-destructive">Log error</p>
+              <p className="mt-0.5 break-words font-mono text-[11px] leading-relaxed text-destructive">{email.error}</p>
+            </div>
+          )}
+
           <div className="mt-5 flex gap-2">
             <Dialog.Close className="h-10 flex-1 cursor-pointer rounded-full border border-border text-xs font-medium text-lichen transition-colors hover:bg-mint">
               Tutup

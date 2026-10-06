@@ -126,6 +126,9 @@ export default function SyncDetailPage() {
                         {e.ignore_reason ? ` · ${e.ignore_reason}` : ''}
                         {e.confidence != null ? ` · ${Math.round(e.confidence * 100)}%` : ''}
                       </p>
+                      {e.error && (
+                        <p className="mt-1 break-words font-mono text-[11px] leading-relaxed text-destructive">log: {e.error}</p>
+                      )}
                       {e.transaction && (
                         <p className="tnum mt-1 font-mono text-xs font-medium text-forest-ink">
                           {e.transaction.merchant || e.transaction.category || 'Pengeluaran'} · {formatCurrency(e.transaction.amount, e.transaction.currency)}

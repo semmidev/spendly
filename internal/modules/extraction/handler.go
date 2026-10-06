@@ -109,7 +109,7 @@ func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 	_ = h.svc.pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM transactions
 		WHERE user_id=$1 AND deleted_at IS NULL AND status='ignored'`, uid).Scan(&txTotal)
 	_ = h.svc.pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM raw_emails r JOIN gmail_connections c ON c.id=r.connection_id
-		WHERE c.user_id=$1 AND r.status IN ('gated_out','ignored','dedup')`, uid).Scan(&emailTotal)
+		WHERE c.user_id=$1 AND r.status IN ('gated_out','ignored','dedup','failed')`, uid).Scan(&emailTotal)
 
 	trows, err := h.svc.pool.Query(r.Context(), `SELECT t.id::text, t.amount, t.currency, t.occurred_at,
 		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, COALESCE(t.payment_source,''),
@@ -136,10 +136,10 @@ func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 				"payment_source": payment, "email_subject": subj, "email_sender": sender, "email_received_at": recvAt})
 		}
 	}
-	erows, _ := h.svc.pool.Query(r.Context(), `SELECT r.id::text, r.gmail_message_id, r.ignore_reason, r.received_at,
+	erows, _ := h.svc.pool.Query(r.Context(), `SELECT r.id::text, r.gmail_message_id, r.ignore_reason, r.error, r.received_at,
 		r.subject, r.sender_domain, r.status
 		FROM raw_emails r JOIN gmail_connections c ON c.id=r.connection_id
-		WHERE c.user_id=$1 AND r.status IN ('gated_out','ignored','dedup')
+		WHERE c.user_id=$1 AND r.status IN ('gated_out','ignored','dedup','failed')
 		ORDER BY r.received_at DESC NULLS LAST LIMIT $2 OFFSET $3`, uid, limit, offset)
 	emails := []map[string]any{}
 	if erows != nil {
@@ -147,10 +147,10 @@ func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 		for erows.Next() {
 			var id, gid, reason string
 			var at any
-			var subj, sender, st any
-			if err := erows.Scan(&id, &gid, &reason, &at, &subj, &sender, &st); err == nil {
-				emails = append(emails, map[string]any{"id": id, "gmail_message_id": gid, "reason": reason, "received_at": at,
-					"subject": subj, "sender_domain": sender, "status": st})
+			var subj, sender, st, errMsg any
+			if err := erows.Scan(&id, &gid, &reason, &errMsg, &at, &subj, &sender, &st); err == nil {
+				emails = append(emails, map[string]any{"id": id, "gmail_message_id": gid, "reason": reason, "error": errMsg,
+					"received_at": at, "subject": subj, "sender_domain": sender, "status": st})
 			}
 		}
 	}

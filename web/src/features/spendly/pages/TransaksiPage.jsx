@@ -502,7 +502,7 @@ export default function TransaksiPage() {
 
           {tab === 'ignored' && ignoredEmails.length > 0 && (
             <div className="pt-1">
-              <SectionTitle>Email diabaikan</SectionTitle>
+              <SectionTitle>Email diabaikan / gagal</SectionTitle>
               <Panel className="divide-y divide-border">
                 {ignoredEmails.map((e) => (
                   <div key={e.id} className="flex items-center gap-3 px-4 py-3">
@@ -512,8 +512,9 @@ export default function TransaksiPage() {
                       className="min-w-0 flex-1 cursor-pointer text-left"
                     >
                       <span className="block truncate text-xs font-medium text-forest-ink">{e.subject || '(tanpa subjek)'}</span>
-                      <span className="block truncate font-mono text-[11px] text-lichen">
-                        {e.sender_domain ? `${e.sender_domain} · ` : ''}{e.reason || 'bukan pengeluaran'}
+                      <span className={cn('block truncate font-mono text-[11px]', e.error ? 'text-destructive' : 'text-lichen')}>
+                        {e.sender_domain ? `${e.sender_domain} · ` : ''}
+                        {e.error ? `gagal: ${e.error}` : (e.reason || 'bukan pengeluaran')}
                       </span>
                     </button>
                     <button
