@@ -104,15 +104,24 @@ export default function TransaksiPage() {
   const [selectedTx, setSelectedTx] = useState(null);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const mountedRef = useRef(true);
+  // Guard urutan response: hanya request terbaru yang boleh menulis state.
+  // Tanpa ini, response page-1 lama yang selesai belakangan bisa menimpa
+  // hasil append "Muat lagi" sehingga data berikutnya tak muncul.
+  const reqRef = useRef(0);
+  const searchedQRef = useRef(q);
 
   const load = useCallback(async (query = q, category = cat, p = 1, append = false, r = range, f = from, t = to) => {
+    const reqId = ++reqRef.current;
     setLoading(true);
     try {
       if (tab === 'review') {
-        setItems(await getReviewQueue());
+        const data = await getReviewQueue();
+        if (reqId !== reqRef.current) return;
+        setItems(data);
         setTotal(0);
       } else if (tab === 'ignored') {
         const d = await getIgnored();
+        if (reqId !== reqRef.current) return;
         setItems(d.transactions || []);
         setIgnoredEmails(d.emails || []);
       } else {
@@ -124,15 +133,17 @@ export default function TransaksiPage() {
           ...(rp.to ? { to: rp.to } : {}),
           page: p, limit: 20,
         });
+        if (reqId !== reqRef.current) return;
         const list = d?.items || [];
         setItems((prev) => (append ? [...prev, ...list] : list));
         setTotal(d?.meta?.total ?? list.length);
         setPage(p);
       }
     } catch {
+      if (reqId !== reqRef.current) return;
       if (!append) setItems([]);
     } finally {
-      setLoading(false);
+      if (reqId === reqRef.current) setLoading(false);
     }
   }, [tab, q, cat, range, from, to]);
 
@@ -149,9 +160,13 @@ export default function TransaksiPage() {
     return () => { mountedRef.current = false; };
   }, []);
   // Debounce pencarian: tunggu 400ms setelah user berhenti mengetik.
+  // Lewati saat q belum berubah agar tidak ada request page-1 ganda di awal.
   useEffect(() => {
-    if (tab !== 'all') return;
-    const t = setTimeout(() => load(q, cat, 1), 400);
+    if (tab !== 'all' || q === searchedQRef.current) return;
+    const t = setTimeout(() => {
+      searchedQRef.current = q;
+      load(q, cat, 1);
+    }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
@@ -395,7 +410,8 @@ export default function TransaksiPage() {
             <button
               type="button"
               onClick={() => load(q, cat, page + 1, true)}
-              className="w-full rounded-full border border-border py-3 text-xs font-medium text-lichen cursor-pointer"
+              disabled={loading}
+              className="w-full rounded-full border border-border py-3 text-xs font-medium text-lichen cursor-pointer disabled:cursor-default disabled:opacity-50"
             >
               Muat lagi ({items.length}/{total})
             </button>
