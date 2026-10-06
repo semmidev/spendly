@@ -106,6 +106,10 @@ shared wallet, OCR struk.
 - Daftar transaksi: filter tanggal, kategori, nominal; pencarian; grouping per hari/bulan; pagination.
 - Perbandingan bulan lalu; export CSV.
 
+**PWA**
+- Bisa di-install ke layar utama Android (Chrome → Install/Add to Home screen):
+  tampil fullscreen standalone + app-shell offline ringan. Butuh HTTPS di produksi.
+
 ---
 
 ## Arsitektur

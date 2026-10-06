@@ -63,7 +63,11 @@ export default function Login() {
         </a>
 
         <p className="mt-4 text-center text-[13px] leading-relaxed text-stone">
-          Akun dibuat dari nama &amp; email Google. Akses Gmail diminta terpisah, kapan pun kamu siap.
+          {`Made with `}
+          <span className="text-red-500">❤️</span> by{" "}
+          <a href="https://github.com/semmidev" className="underline hover:text-forest-ink">
+            Sammi
+          </a>
         </p>
       </main>
     </div>

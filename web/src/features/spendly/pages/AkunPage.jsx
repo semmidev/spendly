@@ -3,10 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Mail, Trash2, LogOut, RefreshCw, Plus, ShieldCheck, Check,
-  Pause, Play, Square, Moon, Sun, User, SlidersHorizontal, History, ChevronRight,
+  Pause, Play, Square, Moon, Sun, User, SlidersHorizontal, History, ChevronRight, Download,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { getTheme, toggleTheme } from '@/lib/theme';
+import { useInstallPrompt } from '@/lib/useInstallPrompt';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Panel, SectionTitle, Chip } from '@/features/spendly/components/primitives';
@@ -102,6 +103,7 @@ export default function AkunPage() {
   });
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const { canInstall, install } = useInstallPrompt();
   const [scan, setScan] = useState({ window: '30d', limit: 100, from: '', to: '' });
   const [job, setJob] = useState(null); // { id, progress }
   const esRef = useRef(null);
@@ -640,10 +642,29 @@ export default function AkunPage() {
         </Panel>
       </div>
 
+      {/* Aplikasi: install PWA (muncul bila browser mengizinkan) */}
+      {canInstall && (
+        <div className={akunTab === 'akun' ? '' : 'hidden'}>
+          <SectionTitle>Aplikasi</SectionTitle>
+          <Panel>
+            <button
+              type="button"
+              onClick={install}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-mint cursor-pointer"
+            >
+              <Download className="h-4 w-4 shrink-0 text-lichen" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-forest-ink">Install aplikasi</span>
+                <span className="block truncate text-xs text-lichen">Buka dari layar utama, fullscreen tanpa browser</span>
+              </span>
+            </button>
+          </Panel>
+        </div>
+      )}
+
       {/* Akun */}
       <div className={akunTab === 'akun' ? '' : 'hidden'}>
-        <SectionTitle>Akun</SectionTitle>
-        <Panel className="divide-y divide-border">
+        <SectionTitle>Akun</SectionTitle>        <Panel className="divide-y divide-border">
           <button
             type="button"
             onClick={onLogout}
