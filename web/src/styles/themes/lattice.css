@@ -71,3 +71,73 @@
 
   --shadow-md: color(srgb 0 0.121569 0.121569 / 0.04) 0px 12px 12px -6px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 6px 6px -3px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 3px 3px -1.5px, color(srgb 0 0.121569 0.121569 / 0.08) 0px 1px 1px -0.5px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 0px 0px 1px;
 }
+
+/* Mode gelap Lattice: permukaan hijau malam, tinta dibalik jadi terang.
+   Tombol bg-forest-ink + text-white perlu teks gelap agar kontras (lihat rule di bawah). */
+[data-theme='lattice'].dark {
+  --parchment: #0b1a1a;
+  --paper-white: #122626;
+  --forest-ink: #dcebd2;
+  --lichen-gray: #9db8b8;
+  --stone: #9db8b8;
+  --slate: #b9cfcf;
+  --mist: #8aa3a3;
+  --meadow: #2a4e1c;
+  --deep-forest: #8fd18a;
+  --deep-teal: #6fc2c2;
+  --olive: #b8c44a;
+  --plum: #e09ac0;
+  --saffron: #e0b45c;
+  --iris: #b79af0;
+  --mint-surface: #142e2e;
+  --lime-surface: #1a2b1a;
+  --lavender-surface: #23233d;
+  --blush-surface: #2c2130;
+  --buttercream: #3a2f10;
+  --sage-glow: #2a3315;
+  --petal: #33202e;
+
+  --background: #081414;
+  --foreground: #eceee4;
+  --card: #162e2e;
+  --card-foreground: #eceee4;
+  --popover: #162e2e;
+  --popover-foreground: #eceee4;
+
+  --primary: #dcebd2;
+  --primary-foreground: #0b1a1a;
+  --secondary: #2a4e1c;
+  --secondary-foreground: #eceee4;
+  --muted: #1d3535;
+  --muted-foreground: #9db8b8;
+  --accent: #4a7a3a;
+  --accent-foreground: #ffffff;
+  --destructive: #c05555;
+  --destructive-foreground: #ffffff;
+
+  --border: #2e4a4a;
+  --input: #335252;
+  --ring: #dcebd2;
+
+  --chart-1: #8fd18a;
+  --chart-2: #6fc2c2;
+  --chart-3: #b8c44a;
+  --chart-4: #e09ac0;
+  --chart-5: #e0b45c;
+  --chart-6: #b79af0;
+}
+
+/* --forest-ink dibalik terang di dark mode: tombol/badge solid perlu teks
+   gelap agar kontras. Cakup button/link/span saja — panel hero dikecualikan
+   (tetap gelap via .panel-hero di bawah). */
+.dark :is(button.bg-forest-ink, a.bg-forest-ink, span.bg-forest-ink) {
+  color: #0b1a1a;
+}
+
+/* Kartu hero "Total bulan ini": tetap hijau gelap pekat di dark mode agar
+   teks putih dan tombol putih di dalamnya tetap terbaca. */
+.dark .panel-hero {
+  background-color: #10403a;
+  border-color: #2e5a4c;
+  color: #f2f0e8;
+}

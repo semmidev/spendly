@@ -33,6 +33,11 @@ export async function restoreTransaction(id) {
   return data;
 }
 
+export async function updateTransaction(id, payload) {
+  const { data } = await client.patch(`/transactions/${id}`, payload);
+  return data;
+}
+
 export async function getCategories() {
   const { data } = await client.get('/categories');
   return data;
@@ -142,5 +147,15 @@ export async function updateGmailSettings(id, payload) {
 
 export async function getSyncStatus(connection_id) {
   const { data } = await client.get('/sync/status', { params: connection_id ? { connection_id } : {} });
+  return data;
+}
+
+export async function getSyncHistory(connection_id, limit = 20) {
+  const { data } = await client.get('/gmail/sync/history', { params: { ...(connection_id ? { connection_id } : {}), limit } });
+  return data?.items || [];
+}
+
+export async function getSyncDetail(jobId) {
+  const { data } = await client.get(`/gmail/sync/${jobId}/detail`);
   return data;
 }

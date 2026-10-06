@@ -146,3 +146,72 @@ func TestPipelineIntegration(t *testing.T) {
 		t.Fatalf("duplikat raw_email_id: count=%d mau 1", cnt)
 	}
 }
+
+// TestReenableDeletedWithoutAI: email yang transaksinya dihapus user
+// dipulihkan dari cache ekstraksi (content_hash) — tanpa panggilan AI/parser
+// ulang. Bukti: extractions.model berawalan "cache:" dan baris transaksi
+// yang sama diaktifkan lagi (deleted_at NULL, id sama).
+func TestReenableDeletedWithoutAI(t *testing.T) {
+	pool := testutil.StartPostgres(t)
+	ctx := context.Background()
+	cfg := &config.Config{AIModel: "test"} // tanpa API key → ai nil
+	enc, _ := security.NewAESEncryptor("0123456789abcdef0123456789abcdef")
+	svc := NewService(pool, cfg, mailsync.NewService(pool, cfg, enc))
+
+	uid := ledger.EnsureDevUser(ctx, pool)
+	var connID string
+	if err := pool.QueryRow(ctx, `INSERT INTO gmail_connections (user_id, google_email, enc_refresh_token, status)
+		VALUES ($1,'t@x.id','x','active') RETURNING id::text`, uid).Scan(&connID); err != nil {
+		t.Fatalf("insert connection: %v", err)
+	}
+	var raw string
+	if err := pool.QueryRow(ctx, `INSERT INTO raw_emails (connection_id, gmail_message_id, content_hash, status, received_at)
+		VALUES ($1::uuid,'gmail-del-1','hash-del-1','fetched',now()) RETURNING id::text`, connID).Scan(&raw); err != nil {
+		t.Fatalf("insert raw: %v", err)
+	}
+	str := func(s string) *string { return &s }
+	res := llm.Result{IsExpense: true, Kind: "purchase", AmountRaw: str("Rp 27.500"),
+		Currency: "IDR", Merchant: "Grab", OccurredAtRaw: str("05 Okt 2026 10:00 WIB"),
+		ReferenceNo: str("REUSE9"), Category: str("Transport"), Confidence: 0.9}
+	if err := svc.apply(ctx, raw, uid, time.Now(), res, llm.Usage{}, false); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	var txID string
+	_ = pool.QueryRow(ctx, `SELECT id::text FROM transactions WHERE raw_email_id=$1::uuid`, raw).Scan(&txID)
+
+	// User menghapus transaksi; sync berikutnya me-reset raw ke fetched
+	// (SQL sama persis seperti runSync) lalu memproses ulang.
+	if _, err := pool.Exec(ctx, `UPDATE transactions SET deleted_at=now() WHERE id=$1::uuid`, txID); err != nil {
+		t.Fatalf("soft delete: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE raw_emails r SET status='fetched'
+		WHERE r.connection_id=$1::uuid AND r.status <> 'fetched'
+		AND EXISTS (SELECT 1 FROM transactions t WHERE t.raw_email_id=r.id AND t.deleted_at IS NOT NULL)`, connID); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	fetched := false
+	svc.fetchText = func(ctx context.Context, connID, gmailID string) (string, string, string, time.Time, error) {
+		fetched = true
+		return "Bank <noreply@bca.co.id>", "Transaksi Berhasil",
+			"Pembayaran Rp 27.500 ke Grab berhasil. Ref REUSE9.", time.Now(), nil
+	}
+	if err := svc.ProcessRaw(ctx, raw); err != nil {
+		t.Fatalf("ProcessRaw: %v", err)
+	}
+	if !fetched {
+		t.Fatal("teks email tidak dibaca ulang")
+	}
+	var model string
+	_ = pool.QueryRow(ctx, `SELECT model FROM extractions WHERE raw_email_id=$1::uuid`, raw).Scan(&model)
+	if len(model) < 6 || model[:6] != "cache:" {
+		t.Fatalf("bukan dari cache (AI/parser jalan ulang?): model=%q", model)
+	}
+	var gotID string
+	var deletedAt any
+	if err := pool.QueryRow(ctx, `SELECT id::text, deleted_at FROM transactions WHERE id=$1::uuid`, txID).Scan(&gotID, &deletedAt); err != nil {
+		t.Fatalf("select restored: %v", err)
+	}
+	if gotID != txID || deletedAt != nil {
+		t.Fatalf("tidak di-enable-kan lagi: id=%s deleted_at=%v", gotID, deletedAt)
+	}
+}

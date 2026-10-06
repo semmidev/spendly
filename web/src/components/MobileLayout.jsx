@@ -9,7 +9,8 @@ export default function MobileLayout() {
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <div className="relative mx-auto flex min-h-dvh max-w-md flex-col">
-        <main id="main-content" className="flex-1 px-4 pb-28 pt-6">
+        {/* Nav sticky ikut alur di bawah: tidak perlu ruang kosong cadangan. */}
+        <main id="main-content" className="flex-1 px-4 pb-6 pt-6">
           <Outlet context={{ openQuickAdd: () => setQuickAddOpen(true) }} />
         </main>
 

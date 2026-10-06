@@ -11,6 +11,7 @@ const BerandaPage = lazy(() => import('@/features/spendly/pages/BerandaPage'));
 const TransaksiPage = lazy(() => import('@/features/spendly/pages/TransaksiPage'));
 const LaporanPage = lazy(() => import('@/features/spendly/pages/LaporanPage'));
 const AkunPage = lazy(() => import('@/features/spendly/pages/AkunPage'));
+const SyncDetailPage = lazy(() => import('@/features/spendly/pages/SyncDetailPage'));
 
 function RouteFallback() {
   return (
@@ -67,6 +68,7 @@ export default function App() {
               <Route path="/transaksi" element={<TransaksiPage />} />
               <Route path="/laporan" element={<LaporanPage />} />
               <Route path="/akun" element={<AkunPage />} />
+              <Route path="/akun/sync/:id" element={<SyncDetailPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/beranda" replace />} />
           </Routes>

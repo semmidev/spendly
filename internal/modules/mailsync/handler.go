@@ -3,6 +3,7 @@ package mailsync
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -24,7 +25,9 @@ func (h *Handler) Mount(r chi.Router) {
 	// Sync memanggil Gmail + AI (mahal) → batasi lebih ketat per IP.
 	r.With(middleware.RateLimit(10, time.Minute)).Post("/gmail/sync", h.startSync)
 	r.Get("/gmail/sync/active", h.activeSync)
+	r.Get("/gmail/sync/history", h.syncHistory)
 	r.Get("/gmail/sync/{id}", h.syncStatus)
+	r.Get("/gmail/sync/{id}/detail", h.syncDetail)
 	r.Post("/gmail/sync/{id}/pause", h.pauseSync)
 	r.Post("/gmail/sync/{id}/resume", h.resumeSync)
 	r.Post("/gmail/sync/{id}/cancel", h.cancelSync)
@@ -186,6 +189,38 @@ func (h *Handler) syncStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	stats, _ := h.svc.SyncJobStats(jobID, uid)
 	web.Success(w, http.StatusOK, "Status sinkronisasi", map[string]any{"progress": p, "stats": stats}, nil)
+}
+
+// syncHistory: N job terakhir untuk tab Riwayat (terbaru dulu).
+func (h *Handler) syncHistory(w http.ResponseWriter, r *http.Request) {
+	uid, _ := web.UserID(r.Context())
+	connID := r.URL.Query().Get("connection_id")
+	if connID == "" {
+		connID = h.svc.firstConnection(r.Context(), uid)
+	}
+	if connID == "" {
+		web.Success(w, http.StatusOK, "Riwayat sinkronisasi", map[string]any{"items": []map[string]any{}}, nil)
+		return
+	}
+	limit := 20
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			limit = n
+		}
+	}
+	items := h.svc.SyncHistory(r.Context(), uid, connID, limit)
+	web.Success(w, http.StatusOK, "Riwayat sinkronisasi", map[string]any{"items": items}, nil)
+}
+
+// syncDetail: satu job + email yang diproses dalam jendelanya.
+func (h *Handler) syncDetail(w http.ResponseWriter, r *http.Request) {
+	uid, _ := web.UserID(r.Context())
+	data, err := h.svc.SyncDetail(r.Context(), uid, chi.URLParam(r, "id"))
+	if err != nil {
+		web.Error(w, r, err)
+		return
+	}
+	web.Success(w, http.StatusOK, "Detail sinkronisasi", data, nil)
 }
 
 func (h *Handler) pauseSync(w http.ResponseWriter, r *http.Request) {

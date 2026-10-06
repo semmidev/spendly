@@ -35,6 +35,15 @@ export function formatCurrency(amount, currency = 'IDR') {
   }
 }
 
+// Sapaan berdasarkan jam lokal: pagi ☀️ / siang 🌤️ / sore 🌇 / malam 🌙.
+export function getGreeting(date = new Date()) {
+  const h = date.getHours();
+  if (h >= 5 && h < 11) return 'Selamat pagi ☀️';
+  if (h >= 11 && h < 15) return 'Selamat siang 🌤️';
+  if (h >= 15 && h < 18) return 'Selamat sore 🌇';
+  return 'Selamat malam 🌙';
+}
+
 export function formatNumber(num) {
   if (num === undefined || num === null) return '0';
   return new Intl.NumberFormat('id-ID').format(num);

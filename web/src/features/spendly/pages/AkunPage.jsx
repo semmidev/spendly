@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Mail, Trash2, LogOut, RefreshCw, Plus, ShieldCheck, Check,
-  Pause, Play, Square,
+  Pause, Play, Square, Moon, Sun, User, SlidersHorizontal, History, ChevronRight,
 } from 'lucide-react';
+import { formatDate } from '@/lib/utils';
+import { getTheme, toggleTheme } from '@/lib/theme';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Panel, SectionTitle, Chip } from '@/features/spendly/components/primitives';
@@ -14,7 +16,7 @@ import { useAuthStore } from '@/features/auth/store';
 import client from '@/lib/client';
 import {
   getGmailConnections, disconnectGmail, getSenders, putSenders, deleteSenderRegistry,
-  getSyncStatus, startGmailSync, getSyncJob, getActiveSyncJob, pauseSyncJob, resumeSyncJob, cancelSyncJob, syncEventsUrl, updateGmailSettings,
+  getSyncStatus, startGmailSync, getSyncJob, getActiveSyncJob, pauseSyncJob, resumeSyncJob, cancelSyncJob, syncEventsUrl, updateGmailSettings, getSyncHistory,
 } from '@/features/spendly/api';
 
 // Preset jendela scan. "Bulan ini" dihitung dari tanggal 1 bulan berjalan.
@@ -61,6 +63,26 @@ function clearStoredJob() {
   }
 }
 
+const AKUN_TABS = [
+  { id: 'akun', title: 'Akun', icon: User },
+  { id: 'sinkron', title: 'Sinkron', icon: SlidersHorizontal },
+  { id: 'riwayat', title: 'Riwayat', icon: History },
+];
+
+const JOB_STATUS_STYLE = {
+  done: 'border-deep-forest/30 bg-sage text-deep-forest',
+  error: 'border-destructive/40 bg-destructive/10 text-destructive',
+  running: 'border-network/40 bg-mint text-deep-forest',
+  paused: 'border-saffron/40 bg-butter text-saffron',
+  canceling: 'border-saffron/40 bg-butter text-saffron',
+  canceled: 'border-border bg-mint text-lichen',
+};
+
+const JOB_STATUS_LABEL = {
+  done: 'Selesai', error: 'Gagal', running: 'Berjalan',
+  paused: 'Dijeda', canceling: 'Menghentikan…', canceled: 'Dibatalkan',
+};
+
 export default function AkunPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
@@ -71,6 +93,15 @@ export default function AkunPage() {
   const [loading, setLoading] = useState(true);
   const [senderOpen, setSenderOpen] = useState(false);
   const [pendingSender, setPendingSender] = useState(null);
+  const [pendingDeleteAccount, setPendingDeleteAccount] = useState(false);
+  const [dark, setDark] = useState(() => getTheme() === 'dark');
+  const [searchParams] = useSearchParams();
+  const [akunTab, setAkunTab] = useState(() => {
+    const t = searchParams.get('tab');
+    return AKUN_TABS.some((x) => x.id === t) ? t : 'akun';
+  });
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [scan, setScan] = useState({ window: '30d', limit: 100, from: '', to: '' });
   const [job, setJob] = useState(null); // { id, progress }
   const esRef = useRef(null);
@@ -289,8 +320,22 @@ export default function AkunPage() {
     } catch (e) { toast.error(e?.response?.data?.message || 'Gagal'); }
   }
 
+  async function loadHistory() {
+    if (!connId) { setHistory([]); return; }
+    setHistoryLoading(true);
+    try {
+      setHistory(await getSyncHistory(connId));
+    } catch { setHistory([]); }
+    finally { setHistoryLoading(false); }
+  }
+
+  useEffect(() => {
+    if (akunTab === 'riwayat') loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [akunTab, connId]);
+
   async function deleteAccount() {
-    if (!confirm('Hapus akun + seluruh data? Tindakan ini permanen.')) return;
+    setPendingDeleteAccount(false);
     setBusy('del');
     try {
       await client.delete('/users/me');
@@ -316,8 +361,25 @@ export default function AkunPage() {
     <div className="space-y-6">
       <h1 className="font-heading text-[22px] leading-tight font-medium tracking-tight text-forest-ink">Akun</h1>
 
+      {/* Tabs */}
+      <div className="flex border-b border-border">
+        {AKUN_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setAkunTab(t.id)}
+            className={`-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2.5 text-xs font-medium transition-colors cursor-pointer ${
+              akunTab === t.id ? 'border-forest-ink text-forest-ink' : 'border-transparent text-lichen'
+            }`}
+          >
+            <t.icon className="h-3.5 w-3.5" />
+            {t.title}
+          </button>
+        ))}
+      </div>
+
       {/* Profil */}
-      <Panel className="flex items-center gap-3.5 p-4">
+      <Panel className={`items-center gap-3.5 p-4 ${akunTab === 'akun' ? 'flex' : 'hidden'}`}>
         <span className="flex h-12 w-12 items-center justify-center rounded-full border border-forest-ink bg-forest-ink font-heading text-lg font-medium text-white">
           {initial}
         </span>
@@ -327,8 +389,8 @@ export default function AkunPage() {
         </div>
       </Panel>
 
-      {/* Gmail */}
-      <div>
+      {/* Gmail + sinkronisasi */}
+      <div className={akunTab === 'sinkron' ? '' : 'hidden'}>
         <SectionTitle>Gmail</SectionTitle>
         <Panel className="p-4">
           {loading ? (
@@ -383,6 +445,55 @@ export default function AkunPage() {
                   sync terakhir: {status.last_synced_at ? new Date(status.last_synced_at).toLocaleString('id-ID') : 'belum pernah'}
                   {status.total_scanned ? ` · ${status.total_scanned} email dipindai` : ''}
                 </p>
+              )}
+
+              {/* Email yang dibaca — di atas pengaturan scan agar tidak lupa dicentang */}
+              <button
+                type="button"
+                onClick={() => setSenderOpen(true)}
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-sm border border-border bg-card text-xs font-medium text-lichen transition-colors hover:bg-mint cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" /> Tambah pengirim
+              </button>
+
+              {senders.length > 0 && (
+                <div className="pt-1">
+                  <p className="mb-2 flex items-center gap-1.5 font-mono text-[11px] font-medium tracking-wide text-saffron uppercase">
+                    <ShieldCheck className="h-3.5 w-3.5" /> Email yang dibaca
+                  </p>
+                  <div className="grid max-h-72 grid-cols-2 gap-2 overflow-y-auto pr-0.5 sm:grid-cols-3">
+                    {senders.map((s) => (
+                      <div key={s.domain} className="flex min-w-0 items-start gap-1.5 rounded-md border border-border bg-card p-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleSender(s.domain, s.allowed)}
+                          className="flex min-w-0 flex-1 items-start gap-2 text-left cursor-pointer"
+                        >
+                          <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border ${
+                            s.allowed ? 'border-forest-ink bg-forest-ink text-white' : 'border-border text-transparent'
+                          }`}>
+                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-medium text-forest-ink" title={s.label || s.domain}>{s.label || s.domain}</span>
+                            <span className="block truncate font-mono text-[10px] text-lichen" title={s.domain}>{s.domain}</span>
+                          </span>
+                        </button>
+                        {s.can_delete && (
+                          <button
+                            type="button"
+                            onClick={() => setPendingSender(s)}
+                            disabled={busy === `del:${s.id}`}
+                            aria-label="Hapus pengirim"
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
 
               {/* Pengaturan scan */}
@@ -505,61 +616,32 @@ export default function AkunPage() {
                   Scan ulang
                 </button>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setSenderOpen(true)}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-sm border border-border bg-card text-xs font-medium text-lichen transition-colors hover:bg-mint cursor-pointer"
-              >
-                <Plus className="h-3.5 w-3.5" /> Tambah pengirim
-              </button>
-
-              {senders.length > 0 && (
-                <div className="pt-1">
-                  <p className="mb-2 flex items-center gap-1.5 font-mono text-[11px] font-medium tracking-wide text-saffron uppercase">
-                    <ShieldCheck className="h-3.5 w-3.5" /> Email yang dibaca
-                  </p>
-                  <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
-                    {senders.map((s) => (
-                      <div key={s.domain} className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => toggleSender(s.domain, s.allowed)}
-                          className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-mint cursor-pointer"
-                        >
-                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border ${
-                            s.allowed ? 'border-forest-ink bg-forest-ink text-white' : 'border-border text-transparent'
-                          }`}>
-                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-xs font-medium text-forest-ink">{s.label || s.domain}</span>
-                            <span className="block truncate font-mono text-[11px] text-lichen">{s.domain}</span>
-                          </span>
-                        </button>
-                        {s.can_delete && (
-                          <button
-                            type="button"
-                            onClick={() => setPendingSender(s)}
-                            disabled={busy === `del:${s.id}`}
-                            aria-label="Hapus pengirim"
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 cursor-pointer"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </Panel>
       </div>
 
+      {/* Tampilan */}
+      <div className={akunTab === 'akun' ? '' : 'hidden'}>
+        <SectionTitle>Tampilan</SectionTitle>
+        <Panel className="flex items-center gap-3 px-4 py-3.5">
+          {dark ? <Moon className="h-4 w-4 text-lichen" /> : <Sun className="h-4 w-4 text-lichen" />}
+          <span className="flex-1 text-sm font-medium text-forest-ink">Mode gelap</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={dark}
+            aria-label="Mode gelap"
+            onClick={() => setDark(toggleTheme() === 'dark')}
+            className={`relative h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors ${dark ? 'bg-forest-ink' : 'bg-border'}`}
+          >
+            <span className={`absolute top-0.5 h-6 w-6 rounded-full shadow transition-all ${dark ? 'left-[22px] bg-[#0b1a1a]' : 'left-0.5 bg-white'}`} />
+          </button>
+        </Panel>
+      </div>
+
       {/* Akun */}
-      <div>
+      <div className={akunTab === 'akun' ? '' : 'hidden'}>
         <SectionTitle>Akun</SectionTitle>
         <Panel className="divide-y divide-border">
           <button
@@ -571,7 +653,7 @@ export default function AkunPage() {
           </button>
           <button
             type="button"
-            onClick={deleteAccount}
+            onClick={() => setPendingDeleteAccount(true)}
             disabled={busy === 'del'}
             className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-sm font-medium text-destructive transition-colors hover:bg-destructive/5 disabled:opacity-50 cursor-pointer"
           >
@@ -580,9 +662,67 @@ export default function AkunPage() {
         </Panel>
       </div>
 
-      <p className="px-4 text-center font-mono text-[11px] leading-relaxed text-lichen">
+      <p className={`px-4 text-center font-mono text-[11px] leading-relaxed text-lichen ${akunTab === 'akun' ? '' : 'hidden'}`}>
         Spendly hanya membaca email dari pengirim yang kamu izinkan. Isi email tidak disimpan.
       </p>
+
+      {/* Riwayat sinkronisasi */}
+      <div className={akunTab === 'riwayat' ? '' : 'hidden'}>
+        <SectionTitle
+          action={
+            <button
+              type="button"
+              onClick={loadHistory}
+              disabled={historyLoading}
+              aria-label="Muat ulang riwayat"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-lichen transition-colors hover:bg-mint disabled:opacity-50 cursor-pointer"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
+            </button>
+          }
+        >
+          Riwayat sinkronisasi
+        </SectionTitle>
+        {historyLoading && history.length === 0 ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => <Skeleton key={i} className="h-[64px] w-full rounded-lg" />)}
+          </div>
+        ) : history.length === 0 ? (
+          <Panel className="px-6 py-10 text-center">
+            <p className="font-heading text-[15px] font-medium text-forest-ink">Belum ada riwayat</p>
+            <p className="mx-auto mt-1 max-w-[17rem] text-xs leading-relaxed text-lichen">
+              {conns.length === 0
+                ? 'Hubungkan Gmail dan jalankan sinkronisasi dulu.'
+                : 'Jalankan sinkronisasi di tab Sinkron untuk melihat riwayatnya di sini.'}
+            </p>
+          </Panel>
+        ) : (
+          <Panel className="divide-y divide-border">
+            {history.map((h) => (
+              <button
+                key={h.id}
+                type="button"
+                onClick={() => navigate(`/akun/sync/${h.id}`)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-mint cursor-pointer"
+              >
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] font-medium ${JOB_STATUS_STYLE[h.status] || JOB_STATUS_STYLE.canceled}`}>
+                  {JOB_STATUS_LABEL[h.status] || h.status}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium text-forest-ink">
+                    {h.mode === 'backfill' ? 'Penuh' : 'Inkremental'} · {h.new} baru · {h.gated} diabaikan · {h.extracted} diekstrak
+                  </span>
+                  <span className="tnum block truncate font-mono text-[11px] text-lichen">
+                    {h.created_at ? formatDate(h.created_at) : ''}
+                    {h.message ? ` · ${h.message}` : ''}
+                  </span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-lichen" />
+              </button>
+            ))}
+          </Panel>
+        )}
+      </div>
 
       <AddSenderDrawer open={senderOpen} onOpenChange={setSenderOpen} onAdded={load} />
 
@@ -593,6 +733,16 @@ export default function AkunPage() {
         description={pendingSender ? `${pendingSender.label || pendingSender.domain} akan dihapus dari daftar.` : ''}
         confirmLabel="Hapus"
         onConfirm={onDeleteSender}
+      />
+
+      <ConfirmDialog
+        open={pendingDeleteAccount}
+        onOpenChange={setPendingDeleteAccount}
+        title="Hapus akun & data?"
+        description="Seluruh transaksi, koneksi Gmail, dan pengaturanmu akan dihapus permanen dan tidak bisa dikembalikan."
+        confirmLabel={busy === 'del' ? 'Menghapus…' : 'Ya, hapus permanen'}
+        confirmWord="hapus"
+        onConfirm={deleteAccount}
       />
     </div>
   );

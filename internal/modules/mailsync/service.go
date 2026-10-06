@@ -393,8 +393,18 @@ func (s *Service) incremental(ctx context.Context, client gmailClient, connectio
 	return st, nil
 }
 
-// processOne: fetch → clean → gate → simpan idempoten. Return (baru, gated, domain, subject).
+// processOne: filter allowlist via metadata → fetch → clean → gate → simpan
+// idempoten. Body email dari pengirim yang tidak dicentang tidak pernah
+// diunduh (hemat kuota + privasi). Return (baru, gated, domain, subject).
 func (s *Service) processOne(ctx context.Context, client gmailClient, connectionID string, allowed map[string]bool, gmailID string) (bool, bool, string, string) {
+	// Lapisan 1: header From saja. Gagal metadata → lanjut ke Get penuh
+	// (fail-open; cek autoritatif di bawah tetap jalan).
+	if meta, merr := client.GetMetadata(ctx, gmailID); merr == nil {
+		if dom := senderDomain(headerFrom(meta)); dom != "" && !allowed[dom] {
+			slog.Debug("email dilewati (pengirim tak diizinkan)", "conn", shortID(connectionID), "sender", dom)
+			return false, false, dom, ""
+		}
+	}
 	msg, err := client.Get(ctx, gmailID)
 	if err != nil {
 		slog.Warn("gagal ambil email", "conn", shortID(connectionID), "gmail_id", gmailID, "error", err)
@@ -409,10 +419,10 @@ func (s *Service) processOne(ctx context.Context, client gmailClient, connection
 	hash := sha256.Sum256([]byte(strings.ToLower(strings.Join(strings.Fields(c.Text), " "))))
 	ch := hex.EncodeToString(hash[:])
 	var inserted bool
-	err = s.pool.QueryRow(ctx, `INSERT INTO raw_emails (connection_id, gmail_message_id, content_hash, status, parser_version, received_at)
-		VALUES ($1::uuid,$2,$3,'fetched','v1',$4)
+	err = s.pool.QueryRow(ctx, `INSERT INTO raw_emails (connection_id, gmail_message_id, content_hash, status, parser_version, received_at, subject, sender_domain)
+		VALUES ($1::uuid,$2,$3,'fetched','v1',$4,$5,$6)
 		ON CONFLICT (connection_id, gmail_message_id) DO NOTHING
-		RETURNING true`, connectionID, gmailID, ch, nullTime(c.InternalDate)).Scan(&inserted)
+		RETURNING true`, connectionID, gmailID, ch, nullTime(c.InternalDate), c.Subject, dom).Scan(&inserted)
 	if err != nil || !inserted {
 		slog.Debug("email duplikat dilewati", "conn", shortID(connectionID), "sender", dom, "gmail_id", gmailID)
 		return false, false, dom, c.Subject
@@ -429,6 +439,20 @@ func (s *Service) processOne(ctx context.Context, client gmailClient, connection
 		"conn", shortID(connectionID), "sender", dom,
 		"subject", truncate(c.Subject, 90), "received", c.InternalDate.Format("2006-01-02 15:04"))
 	return true, false, dom, c.Subject
+}
+
+// headerFrom mengambil header From tanpa menyentuh body (untuk filter
+// allowlist sebelum body diunduh). Tahan nil untuk respons metadata ganjil.
+func headerFrom(msg *gmailapi.Message) string {
+	if msg == nil || msg.Payload == nil {
+		return ""
+	}
+	for _, h := range msg.Payload.Headers {
+		if h != nil && strings.EqualFold(h.Name, "From") {
+			return h.Value
+		}
+	}
+	return ""
 }
 
 func shortID(id string) string {
@@ -546,6 +570,110 @@ func (s *Service) Status(ctx context.Context, uid, connectionID string) (map[str
 		out["scan_to"] = scanTo.Format("2006-01-02")
 	}
 	return out, nil
+}
+
+// SyncHistory: N job terakhir koneksi ini (terbaru dulu) untuk tab Riwayat.
+func (s *Service) SyncHistory(ctx context.Context, uid, connectionID string, limit int) []map[string]any {
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	rows, err := s.pool.Query(ctx, `SELECT j.id::text, j.status, j.mode, j.processed, j.total,
+		j.new_count, j.gated_count, j.extracted_count, j.scan_limit, j.message, j.created_at, j.finished_at
+		FROM sync_jobs j
+		WHERE j.user_id=$1 AND j.connection_id=$2::uuid
+		ORDER BY j.created_at DESC LIMIT $3`, uid, connectionID, limit)
+	if err != nil {
+		return []map[string]any{}
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id, status, mode, message string
+		var processed, total, newC, gatedC, extC, scanLim int
+		var created time.Time
+		var finished *time.Time
+		if err := rows.Scan(&id, &status, &mode, &processed, &total, &newC, &gatedC, &extC, &scanLim, &message, &created, &finished); err != nil {
+			continue
+		}
+		out = append(out, map[string]any{
+			"id": id, "status": status, "mode": mode, "processed": processed, "total": total,
+			"new": newC, "gated": gatedC, "extracted": extC, "scan_limit": scanLim,
+			"message": message, "created_at": created, "finished_at": finished,
+		})
+	}
+	return out
+}
+
+// SyncDetail: satu job + email yang diproses dalam jendelanya (subject,
+// domain, status, transaksi hasil). Email lama pra-migrasi 00015 tampil
+// dengan subject/domain kosong.
+func (s *Service) SyncDetail(ctx context.Context, uid, jobID string) (map[string]any, error) {
+	var connID, status, mode, message string
+	var processed, total, newC, gatedC, extC, scanLim int
+	var created time.Time
+	var finished *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT connection_id::text, status, mode, processed, total,
+		new_count, gated_count, extracted_count, scan_limit, message, created_at, finished_at
+		FROM sync_jobs WHERE id=$1::uuid AND user_id=$2`, jobID, uid).
+		Scan(&connID, &status, &mode, &processed, &total, &newC, &gatedC, &extC, &scanLim, &message, &created, &finished)
+	if err != nil {
+		return nil, apperr.NotFound("riwayat sinkronisasi tidak ditemukan")
+	}
+	end := time.Now()
+	if finished != nil {
+		end = *finished
+	}
+	rows, err := s.pool.Query(ctx, `SELECT r.subject, r.sender_domain, r.status, r.ignore_reason, r.received_at,
+		t.amount, t.currency, m.canonical_name, c.name, e.confidence
+		FROM raw_emails r
+		LEFT JOIN transactions t ON t.raw_email_id=r.id AND t.deleted_at IS NULL
+		LEFT JOIN merchants m ON m.id=t.merchant_id
+		LEFT JOIN categories c ON c.id=t.category_id
+		LEFT JOIN extractions e ON e.raw_email_id=r.id
+		WHERE r.connection_id=$1::uuid AND r.created_at BETWEEN $2 AND $3
+		ORDER BY r.received_at DESC NULLS LAST LIMIT 200`, connID, created, end)
+	emails := []map[string]any{}
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var subject, domain, st, reason, merchant, cat, curr *string
+			var received *time.Time
+			var amount *int64
+			var conf *float64
+			if err := rows.Scan(&subject, &domain, &st, &reason, &received, &amount, &curr, &merchant, &cat, &conf); err != nil {
+				continue
+			}
+			e := map[string]any{
+				"subject": strVal(subject), "sender_domain": strVal(domain), "status": strVal(st),
+				"ignore_reason": strVal(reason), "received_at": received,
+			}
+			if amount != nil {
+				e["transaction"] = map[string]any{
+					"amount": *amount, "currency": strVal(curr),
+					"merchant": strVal(merchant), "category": strVal(cat),
+				}
+			}
+			if conf != nil {
+				e["confidence"] = *conf
+			}
+			emails = append(emails, e)
+		}
+	}
+	return map[string]any{
+		"job": map[string]any{
+			"id": jobID, "status": status, "mode": mode, "processed": processed, "total": total,
+			"new": newC, "gated": gatedC, "extracted": extC, "scan_limit": scanLim,
+			"message": message, "created_at": created, "finished_at": finished,
+		},
+		"emails": emails,
+	}, nil
+}
+
+func strVal(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // SetSettings menyimpan preferensi scan (jendela + batas email per sync).

@@ -32,8 +32,10 @@ func (h *Handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 	uid, _ := web.UserID(r.Context())
 	rows, err := h.svc.pool.Query(r.Context(), `SELECT t.id::text, t.amount, t.currency, t.occurred_at,
 		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, t.status,
-		t.duplicate_of::text, t.confidence, COALESCE(t.payment_source,'')
+		t.duplicate_of::text, t.confidence, COALESCE(t.payment_source,''),
+		r.subject, r.sender_domain, r.received_at
 		FROM transactions t LEFT JOIN merchants m ON m.id=t.merchant_id LEFT JOIN categories c ON c.id=t.category_id
+		LEFT JOIN raw_emails r ON r.id=t.raw_email_id
 		WHERE t.user_id=$1 AND t.deleted_at IS NULL AND t.status='needs_review'
 		ORDER BY t.created_at DESC LIMIT 50`, uid)
 	if err != nil {
@@ -47,12 +49,12 @@ func (h *Handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 		var amount int64
 		var currency, merch, cat, note, source, status, payment string
 		var at any
-		var dupOf, conf any
-		if err := rows.Scan(&id, &amount, &currency, &at, &merch, &cat, &note, &source, &status, &dupOf, &conf, &payment); err == nil {
+		var dupOf, conf, subj, sender, recvAt any
+		if err := rows.Scan(&id, &amount, &currency, &at, &merch, &cat, &note, &source, &status, &dupOf, &conf, &payment, &subj, &sender, &recvAt); err == nil {
 			items = append(items, map[string]any{"id": id, "amount": amount, "currency": currency,
 				"occurred_at": at, "merchant": merch, "category": cat, "note": note,
 				"source": source, "status": status, "duplicate_of": dupOf, "confidence": conf,
-				"payment_source": payment})
+				"payment_source": payment, "email_subject": subj, "email_sender": sender, "email_received_at": recvAt})
 		}
 	}
 	web.Success(w, http.StatusOK, "Antrean review", map[string]any{"items": items}, nil)
@@ -84,8 +86,10 @@ func (h *Handler) ignore(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 	uid, _ := web.UserID(r.Context())
 	trows, err := h.svc.pool.Query(r.Context(), `SELECT t.id::text, t.amount, t.currency, t.occurred_at,
-		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, COALESCE(t.payment_source,'')
+		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, COALESCE(t.payment_source,''),
+		r.subject, r.sender_domain, r.received_at
 		FROM transactions t LEFT JOIN merchants m ON m.id=t.merchant_id LEFT JOIN categories c ON c.id=t.category_id
+		LEFT JOIN raw_emails r ON r.id=t.raw_email_id
 		WHERE t.user_id=$1 AND t.deleted_at IS NULL AND t.status='ignored'
 		ORDER BY t.created_at DESC LIMIT 50`, uid)
 	if err != nil {
@@ -99,13 +103,15 @@ func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 		var amount int64
 		var currency, merch, cat, note, source, payment string
 		var at any
-		if err := trows.Scan(&id, &amount, &currency, &at, &merch, &cat, &note, &source, &payment); err == nil {
+		var subj, sender, recvAt any
+		if err := trows.Scan(&id, &amount, &currency, &at, &merch, &cat, &note, &source, &payment, &subj, &sender, &recvAt); err == nil {
 			txns = append(txns, map[string]any{"id": id, "amount": amount, "currency": currency,
 				"occurred_at": at, "merchant": merch, "category": cat, "note": note, "source": source,
-				"payment_source": payment})
+				"payment_source": payment, "email_subject": subj, "email_sender": sender, "email_received_at": recvAt})
 		}
 	}
-	erows, _ := h.svc.pool.Query(r.Context(), `SELECT r.id::text, r.gmail_message_id, r.ignore_reason, r.received_at
+	erows, _ := h.svc.pool.Query(r.Context(), `SELECT r.id::text, r.gmail_message_id, r.ignore_reason, r.received_at,
+		r.subject, r.sender_domain, r.status
 		FROM raw_emails r JOIN gmail_connections c ON c.id=r.connection_id
 		WHERE c.user_id=$1 AND r.status IN ('gated_out','ignored','dedup')
 		ORDER BY r.received_at DESC NULLS LAST LIMIT 50`, uid)
@@ -115,8 +121,10 @@ func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 		for erows.Next() {
 			var id, gid, reason string
 			var at any
-			if err := erows.Scan(&id, &gid, &reason, &at); err == nil {
-				emails = append(emails, map[string]any{"id": id, "gmail_message_id": gid, "reason": reason, "received_at": at})
+			var subj, sender, st any
+			if err := erows.Scan(&id, &gid, &reason, &at, &subj, &sender, &st); err == nil {
+				emails = append(emails, map[string]any{"id": id, "gmail_message_id": gid, "reason": reason, "received_at": at,
+					"subject": subj, "sender_domain": sender, "status": st})
 			}
 		}
 	}

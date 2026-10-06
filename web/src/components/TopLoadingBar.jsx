@@ -1,82 +1,74 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { subscribeLoading } from '@/lib/client';
+import { cn } from '@/lib/utils';
+
+// Popup loading imut pengganti garis progres: backdrop blur + kartu kecil
+// + tiga titik memantul. Non-blocking (pointer-events-none) agar halaman
+// tetap bisa disentuh. Muncul hanya bila loading > 250ms supaya request
+// cepat tidak bikin kedip.
+const SHOW_DELAY = 250;
 
 export default function TopLoadingBar() {
   const location = useLocation();
-  const [progress, setProgress] = useState(0);
   const [visible, setVisible] = useState(false);
   const timerRef = useRef(null);
-  const completeTimerRef = useRef(null);
 
-  const startProgress = () => {
-    if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
-    if (timerRef.current) clearInterval(timerRef.current);
+  function hide() {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setVisible(false);
+  }
 
-    setVisible(true);
-    setProgress(15);
+  function scheduleShow() {
+    if (timerRef.current) return;
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      setVisible(true);
+    }, SHOW_DELAY);
+  }
 
-    timerRef.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 85) {
-          clearInterval(timerRef.current);
-          return 85;
-        }
-        const diff = (90 - prev) * 0.15;
-        return prev + Math.max(1, diff);
-      });
-    }, 120);
-  };
-
-  const finishProgress = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    setProgress(100);
-
-    completeTimerRef.current = setTimeout(() => {
-      setVisible(false);
-      setTimeout(() => setProgress(0), 300);
-    }, 250);
-  };
-
-  // Trigger loading progress on page/route navigation
+  // Ganti halaman → sembunyikan (halaman baru punya skeleton-nya sendiri;
+  // fetch halaman yang lambat akan memicu popup via aktivitas API).
   useEffect(() => {
-    startProgress();
-    const timeout = setTimeout(() => {
-      finishProgress();
-    }, 300);
-
-    return () => {
-      clearTimeout(timeout);
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
-    };
+    hide();
   }, [location.pathname, location.search]);
 
-  // Trigger loading progress on API request activity
+  // Aktivitas API global.
   useEffect(() => {
     const unsubscribe = subscribeLoading((isLoading) => {
-      if (isLoading) {
-        startProgress();
-      } else {
-        finishProgress();
-      }
+      if (isLoading) scheduleShow();
+      else hide();
     });
-
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, []);
-
-  if (!visible && progress === 0) return null;
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-[99999] pointer-events-none transition-opacity duration-300"
-      style={{ opacity: visible ? 1 : 0 }}
+      className={cn(
+        'pointer-events-none fixed inset-0 z-[99999] flex items-center justify-center bg-forest-ink/10 backdrop-blur-[2px] transition-opacity duration-200',
+        visible ? 'opacity-100' : 'opacity-0',
+      )}
       aria-hidden="true"
     >
       <div
-        className="h-[2px] bg-ink transition-[width] duration-300 ease-out"
-        style={{ width: `${progress}%` }}
-      />
+        className={cn(
+          'flex items-center gap-3 rounded-2xl border border-border bg-card px-5 py-4 shadow-xl transition-all duration-200',
+          visible ? 'scale-100' : 'scale-95',
+        )}
+      >
+        <span className="flex items-center gap-1.5" aria-hidden="true">
+          <span className="h-2 w-2 animate-bounce rounded-full bg-forest-ink [animation-delay:-0.3s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-forest-ink [animation-delay:-0.15s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-forest-ink" />
+        </span>
+        <span className="text-xs font-medium text-lichen">Sebentar ya…</span>
+      </div>
     </div>
   );
 }

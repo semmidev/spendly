@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Search, Trash2, ReceiptText, Sparkles, Inbox, RotateCcw, ChevronDown } from 'lucide-react';
+import { Search, Trash2, ReceiptText, Sparkles, Inbox, RotateCcw, ChevronDown, LayoutList, EyeOff } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { Panel, SectionTitle, CategoryBadge, EmptyState } from '@/features/spendly/components/primitives';
 import ConfirmDialog from '@/features/spendly/components/ConfirmDialog';
+import TransactionDetailModal, { EmailDetailModal } from '@/features/spendly/components/TransactionDetailModal';
 import { uniqueCategories } from '@/features/spendly/categories';
 import {
   getTransactions, deleteTransaction, restoreTransaction, getReviewQueue, confirmReview, ignoreReview,
@@ -14,9 +15,9 @@ import {
 } from '@/features/spendly/api';
 
 const TABS = [
-  { id: 'all', title: 'Semua' },
-  { id: 'review', title: 'Tinjau' },
-  { id: 'ignored', title: 'Diabaikan' },
+  { id: 'all', title: 'Semua', icon: LayoutList },
+  { id: 'review', title: 'Tinjau', icon: Sparkles },
+  { id: 'ignored', title: 'Diabaikan', icon: EyeOff },
 ];
 
 const RANGES = [
@@ -100,6 +101,8 @@ export default function TransaksiPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [selectedTx, setSelectedTx] = useState(null);
+  const [selectedEmail, setSelectedEmail] = useState(null);
   const mountedRef = useRef(true);
 
   const load = useCallback(async (query = q, category = cat, p = 1, append = false, r = range, f = from, t = to) => {
@@ -231,7 +234,11 @@ export default function TransaksiPage() {
   function TxRow({ t }) {
     return (
       <div className="px-4 py-3">
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setSelectedTx(t)}
+          className="flex w-full cursor-pointer items-center gap-3 text-left"
+        >
           <CategoryBadge name={t.category} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-forest-ink">{t.merchant || t.category || 'Pengeluaran'}</p>
@@ -243,7 +250,7 @@ export default function TransaksiPage() {
             </p>
           </div>
           <p className="tnum shrink-0 font-mono text-sm font-medium text-forest-ink">{formatCurrency(t.amount)}</p>
-        </div>
+        </button>
 
         {tab === 'review' && (
           <div className="mt-2.5 flex gap-2 pl-[52px]">
@@ -293,10 +300,11 @@ export default function TransaksiPage() {
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`-mb-px flex-1 border-b-2 py-2.5 text-xs font-medium transition-colors cursor-pointer ${
+            className={`-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2.5 text-xs font-medium transition-colors cursor-pointer ${
               tab === t.id ? 'border-forest-ink text-forest-ink' : 'border-transparent text-lichen'
             }`}
           >
+            <t.icon className="h-3.5 w-3.5" />
             {t.title}
           </button>
         ))}
@@ -399,7 +407,16 @@ export default function TransaksiPage() {
               <Panel className="divide-y divide-border">
                 {ignoredEmails.map((e) => (
                   <div key={e.id} className="flex items-center gap-3 px-4 py-3">
-                    <span className="min-w-0 flex-1 truncate text-xs text-lichen">{e.reason || 'bukan pengeluaran'}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedEmail(e)}
+                      className="min-w-0 flex-1 cursor-pointer text-left"
+                    >
+                      <span className="block truncate text-xs font-medium text-forest-ink">{e.subject || '(tanpa subjek)'}</span>
+                      <span className="block truncate font-mono text-[11px] text-lichen">
+                        {e.sender_domain ? `${e.sender_domain} · ` : ''}{e.reason || 'bukan pengeluaran'}
+                      </span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => reprocessEmail(e.id).then(() => { toast.success('Dijadwalkan ulang'); load(q, cat, 1); })}
@@ -415,6 +432,24 @@ export default function TransaksiPage() {
         </>
       )}
 
+      <TransactionDetailModal
+        tx={selectedTx}
+        categories={cats.length ? cats : uniqueCategories([])}
+        onClose={() => setSelectedTx(null)}
+        onUpdated={(next) => {
+          setItems((prev) => prev.map((x) => (x.id === next.id ? next : x)));
+          setSelectedTx(next);
+        }}
+        onDelete={(t) => { setSelectedTx(null); askDelete(t); }}
+      />
+      <EmailDetailModal
+        email={selectedEmail}
+        onClose={() => setSelectedEmail(null)}
+        onReprocess={(e) => {
+          setSelectedEmail(null);
+          reprocessEmail(e.id).then(() => { toast.success('Dijadwalkan ulang'); load(q, cat, 1); });
+        }}
+      />
       <ConfirmDialog
         open={!!pendingDelete}
         onOpenChange={(open) => { if (!open) setPendingDelete(null); }}

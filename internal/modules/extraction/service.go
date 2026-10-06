@@ -22,6 +22,8 @@ type Service struct {
 	mail   *mailsync.Service
 	ledger *ledger.Store
 	ai     *llm.Client
+	// seam uji: ganti pengambilan teks email (default: unduh ulang dari Gmail).
+	fetchText func(ctx context.Context, connID, gmailID string) (from, subject, text string, received time.Time, err error)
 }
 
 func NewService(pool *pgxpool.Pool, cfg *config.Config, mail *mailsync.Service) *Service {
@@ -46,7 +48,11 @@ func (s *Service) ProcessRaw(ctx context.Context, rawID string) error {
 	}
 	_, _ = s.pool.Exec(ctx, `UPDATE raw_emails SET status='extracting' WHERE id=$1::uuid`, rawID)
 
-	from, subject, text, recv, err := s.mail.FetchText(ctx, connID, gmailID)
+	fetch := s.fetchText
+	if fetch == nil {
+		fetch = s.mail.FetchText
+	}
+	from, subject, text, recv, err := fetch(ctx, connID, gmailID)
 	if err != nil {
 		return s.fail(ctx, rawID, err.Error())
 	}

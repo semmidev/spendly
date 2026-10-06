@@ -11,7 +11,9 @@ export default function BottomNav({ onFab }) {
   return (
     <nav
       aria-label="Navigasi utama"
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-paper-white/95 backdrop-blur-md"
+      // sticky (bukan fixed) agar selalu di dasar alur layout: tidak melompat
+      // saat keyboard terbuka / toolbar browser muncul-hilang di HP.
+      className="sticky bottom-0 z-50 border-t border-border bg-paper-white/95 backdrop-blur-md"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="mx-auto grid max-w-md grid-cols-5 items-end px-3 pb-2 pt-1.5">

@@ -259,7 +259,37 @@ func monthRange(month string, now time.Time) (time.Time, time.Time) {
 func (s *Store) Summary(month, uid string) (int64, []CatTotal, []map[string]any, []CatTotal) {
 	now := time.Now()
 	start, end := monthRange(month, now)
+	return s.summaryRange(start, end, uid, "day")
+}
+
+// YearRange membatasi 1 Januari–31 Desember tahun tersebut (default tahun berjalan).
+func YearRange(year string, now time.Time) (time.Time, time.Time) {
+	y := now.Year()
+	if len(year) == 4 {
+		if t, err := time.Parse("2006", year); err == nil {
+			y = t.Year()
+		}
+	}
+	loc := now.Location()
+	return time.Date(y, 1, 1, 0, 0, 0, 0, loc),
+		time.Date(y, 12, 31, 23, 59, 59, 0, loc)
+}
+
+// SummaryRange agregat bebas (dipakai laporan tren bulanan/tahunan) dengan
+// bucket "day" (per tanggal), "month" (per bulan, label Jan…Des), atau
+// "year" (per tahun).
+func (s *Store) SummaryRange(start, end time.Time, uid, bucket string) (int64, []CatTotal, []map[string]any, []CatTotal) {
+	return s.summaryRange(start, end, uid, bucket)
+}
+
+func (s *Store) summaryRange(start, end time.Time, uid, bucket string) (int64, []CatTotal, []map[string]any, []CatTotal) {
 	ctx := context.Background()
+	format := "YYYY-MM-DD"
+	if bucket == "month" {
+		format = "YYYY-MM"
+	} else if bucket == "year" {
+		format = "YYYY"
+	}
 	var total int64
 	_ = s.pool.QueryRow(ctx, `SELECT COALESCE(SUM(amount),0) FROM transactions
 		WHERE user_id=$1 AND deleted_at IS NULL AND status='confirmed' AND occurred_at BETWEEN $2 AND $3`,
@@ -281,7 +311,7 @@ func (s *Store) Summary(month, uid string) (int64, []CatTotal, []map[string]any,
 	if cats == nil {
 		cats = []CatTotal{}
 	}
-	drows, _ := s.pool.Query(ctx, `SELECT to_char(occurred_at,'YYYY-MM-DD'), COALESCE(SUM(amount),0) FROM transactions
+	drows, _ := s.pool.Query(ctx, `SELECT to_char(occurred_at,'`+format+`'), COALESCE(SUM(amount),0) FROM transactions
 		WHERE user_id=$1 AND deleted_at IS NULL AND status='confirmed' AND occurred_at BETWEEN $2 AND $3
 		GROUP BY 1 ORDER BY 1`, uid, start.UTC(), end.UTC())
 	byDay := map[string]int64{}
@@ -312,7 +342,14 @@ func (s *Store) Summary(month, uid string) (int64, []CatTotal, []map[string]any,
 	if top == nil {
 		top = []CatTotal{}
 	}
-	return total, cats, dayList(byDay, start, end), top
+	switch bucket {
+	case "month":
+		return total, cats, monthList(byDay, start), top
+	case "year":
+		return total, cats, yearList(byDay, start, end), top
+	default:
+		return total, cats, dayList(byDay, start, end), top
+	}
 }
 
 // ---- categories ----
@@ -489,6 +526,30 @@ func dayList(m map[string]int64, start, end time.Time) []map[string]any {
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		k := d.Format("2006-01-02")
 		out = append(out, map[string]any{"label": d.Format("02 Jan"), "total": m[k]})
+	}
+	return out
+}
+
+// monthList selalu 12 bulan (Jan–Des) tahun dari start — sumbu stabil walau kosong.
+func monthList(m map[string]int64, start time.Time) []map[string]any {
+	out := make([]map[string]any, 0, 12)
+	for mo := 1; mo <= 12; mo++ {
+		d := time.Date(start.Year(), time.Month(mo), 1, 0, 0, 0, 0, start.Location())
+		out = append(out, map[string]any{"label": d.Format("Jan"), "total": m[d.Format("2006-01")]})
+	}
+	return out
+}
+
+// yearList per tahun dari start.Year() sampai end.Year() (dibatasi 6 tahun).
+func yearList(m map[string]int64, start, end time.Time) []map[string]any {
+	var out []map[string]any
+	y0, y1 := start.Year(), end.Year()
+	if y1-y0 > 5 {
+		y0 = y1 - 5
+	}
+	for y := y0; y <= y1; y++ {
+		k := time.Date(y, 1, 1, 0, 0, 0, 0, start.Location()).Format("2006")
+		out = append(out, map[string]any{"label": k, "total": m[k]})
 	}
 	return out
 }

@@ -33,7 +33,37 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
 	month := r.URL.Query().Get("month")
+	year := r.URL.Query().Get("year")
+	period := r.URL.Query().Get("period")
 	uid, _ := web.UserID(r.Context())
+	now := time.Now()
+
+	// Tren bulanan: agregat per bulan (Jan–Des) dalam 1 tahun + pembanding tahun lalu.
+	if period == "monthly" {
+		start, end := ledger.YearRange(year, now)
+		total, byCat, tren, top := h.store.SummaryRange(start, end, uid, "month")
+		prevStart, prevEnd := ledger.YearRange(start.AddDate(-1, 0, 0).Format("2006"), now)
+		last, _, _, _ := h.store.SummaryRange(prevStart, prevEnd, uid, "month")
+		web.Success(w, http.StatusOK, "Laporan tahunan per bulan", map[string]any{
+			"tren": tren, "by_category": byCat, "top_merchant": top,
+			"total": total, "avg": total / 12,
+			"compare_last_year": map[string]any{"this_year": total, "last_year": last},
+		}, nil)
+		return
+	}
+
+	// Tren tahunan: 6 tahun terakhir (termasuk tahun berjalan).
+	if period == "yearly" {
+		end := time.Date(now.Year(), 12, 31, 23, 59, 59, 0, now.Location())
+		start := time.Date(now.Year()-5, 1, 1, 0, 0, 0, 0, now.Location())
+		total, byCat, tren, top := h.store.SummaryRange(start, end, uid, "year")
+		web.Success(w, http.StatusOK, "Laporan tahunan", map[string]any{
+			"tren": tren, "by_category": byCat, "top_merchant": top,
+			"total": total, "avg": total / int64(len(tren)),
+		}, nil)
+		return
+	}
+
 	total, byCat, tren, top := h.store.Summary(month, uid)
 
 	prev := time.Now().AddDate(0, -1, 0).Format("2006-01")
