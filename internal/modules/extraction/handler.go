@@ -2,12 +2,26 @@ package extraction
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/semmidev/spendly/internal/modules/ledger"
 	"github.com/semmidev/spendly/internal/platform/apperr"
 	"github.com/semmidev/spendly/internal/platform/web"
 )
+
+// pageArgs membaca page/limit dari query (default 1/20, limit maks 100).
+func pageArgs(r *http.Request) (page, limit, offset int) {
+	limit = 20
+	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 && v <= 100 {
+		limit = v
+	}
+	page = 1
+	if v, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && v > 0 {
+		page = v
+	}
+	return page, limit, (page - 1) * limit
+}
 
 type Handler struct {
 	svc    *Service
@@ -30,6 +44,10 @@ func (h *Handler) Mount(r chi.Router) {
 
 func (h *Handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 	uid, _ := web.UserID(r.Context())
+	page, limit, offset := pageArgs(r)
+	var total int
+	_ = h.svc.pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM transactions
+		WHERE user_id=$1 AND deleted_at IS NULL AND status='needs_review'`, uid).Scan(&total)
 	rows, err := h.svc.pool.Query(r.Context(), `SELECT t.id::text, t.amount, t.currency, t.occurred_at,
 		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, t.status,
 		t.duplicate_of::text, t.confidence, COALESCE(t.payment_source,''),
@@ -37,7 +55,7 @@ func (h *Handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 		FROM transactions t LEFT JOIN merchants m ON m.id=t.merchant_id LEFT JOIN categories c ON c.id=t.category_id
 		LEFT JOIN raw_emails r ON r.id=t.raw_email_id
 		WHERE t.user_id=$1 AND t.deleted_at IS NULL AND t.status='needs_review'
-		ORDER BY t.created_at DESC LIMIT 50`, uid)
+		ORDER BY t.created_at DESC LIMIT $2 OFFSET $3`, uid, limit, offset)
 	if err != nil {
 		web.Error(w, r, err)
 		return
@@ -57,7 +75,8 @@ func (h *Handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 				"payment_source": payment, "email_subject": subj, "email_sender": sender, "email_received_at": recvAt})
 		}
 	}
-	web.Success(w, http.StatusOK, "Antrean review", map[string]any{"items": items}, nil)
+	web.Success(w, http.StatusOK, "Antrean review", map[string]any{"items": items},
+		map[string]any{"total": total, "page": page, "limit": limit})
 }
 
 func (h *Handler) confirm(w http.ResponseWriter, r *http.Request) {
@@ -85,13 +104,20 @@ func (h *Handler) ignore(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 	uid, _ := web.UserID(r.Context())
+	page, limit, offset := pageArgs(r)
+	var txTotal, emailTotal int
+	_ = h.svc.pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM transactions
+		WHERE user_id=$1 AND deleted_at IS NULL AND status='ignored'`, uid).Scan(&txTotal)
+	_ = h.svc.pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM raw_emails r JOIN gmail_connections c ON c.id=r.connection_id
+		WHERE c.user_id=$1 AND r.status IN ('gated_out','ignored','dedup')`, uid).Scan(&emailTotal)
+
 	trows, err := h.svc.pool.Query(r.Context(), `SELECT t.id::text, t.amount, t.currency, t.occurred_at,
 		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, COALESCE(t.payment_source,''),
 		r.subject, r.sender_domain, r.received_at
 		FROM transactions t LEFT JOIN merchants m ON m.id=t.merchant_id LEFT JOIN categories c ON c.id=t.category_id
 		LEFT JOIN raw_emails r ON r.id=t.raw_email_id
 		WHERE t.user_id=$1 AND t.deleted_at IS NULL AND t.status='ignored'
-		ORDER BY t.created_at DESC LIMIT 50`, uid)
+		ORDER BY t.created_at DESC LIMIT $2 OFFSET $3`, uid, limit, offset)
 	if err != nil {
 		web.Error(w, r, err)
 		return
@@ -114,7 +140,7 @@ func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 		r.subject, r.sender_domain, r.status
 		FROM raw_emails r JOIN gmail_connections c ON c.id=r.connection_id
 		WHERE c.user_id=$1 AND r.status IN ('gated_out','ignored','dedup')
-		ORDER BY r.received_at DESC NULLS LAST LIMIT 50`, uid)
+		ORDER BY r.received_at DESC NULLS LAST LIMIT $2 OFFSET $3`, uid, limit, offset)
 	emails := []map[string]any{}
 	if erows != nil {
 		defer erows.Close()
@@ -128,7 +154,8 @@ func (h *Handler) ignored(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	web.Success(w, http.StatusOK, "Daftar diabaikan", map[string]any{"transactions": txns, "emails": emails}, nil)
+	web.Success(w, http.StatusOK, "Daftar diabaikan", map[string]any{"transactions": txns, "emails": emails},
+		map[string]any{"tx_total": txTotal, "email_total": emailTotal, "page": page, "limit": limit})
 }
 
 func (h *Handler) correct(w http.ResponseWriter, r *http.Request) {

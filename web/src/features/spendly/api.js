@@ -33,6 +33,11 @@ export async function restoreTransaction(id) {
   return data;
 }
 
+export async function mergeTransaction(id, intoId) {
+  const { data } = await client.post(`/transactions/${id}/merge`, { into_id: intoId });
+  return data;
+}
+
 export async function updateTransaction(id, payload) {
   const { data } = await client.patch(`/transactions/${id}`, payload);
   return data;
@@ -44,9 +49,9 @@ export async function getCategories() {
 }
 
 // Review queue & Diabaikan
-export async function getReviewQueue() {
-  const { data } = await client.get('/review-queue');
-  return data?.items || [];
+export async function getReviewQueue(params = {}) {
+  const { data } = await client.get('/review-queue', { params });
+  return data || { items: [], meta: {} };
 }
 
 export async function confirmReview(id, category) {
@@ -59,9 +64,9 @@ export async function ignoreReview(id) {
   return data;
 }
 
-export async function getIgnored() {
-  const { data } = await client.get('/ignored');
-  return data || { transactions: [], emails: [] };
+export async function getIgnored(params = {}) {
+  const { data } = await client.get('/ignored', { params });
+  return data || { transactions: [], emails: [], meta: {} };
 }
 
 export async function correctIgnored(id, category) {

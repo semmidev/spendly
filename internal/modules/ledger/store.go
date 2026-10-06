@@ -26,12 +26,14 @@ type Transaction struct {
 type Filter struct {
 	Q        string
 	Category string
+	Source   string
 	From     time.Time
 	To       time.Time
 	Min      int64
 	Max      int64
 	Page     int
 	Limit    int
+	Deleted  bool
 }
 
 type Store struct {
@@ -49,7 +51,13 @@ func (s *Store) List(f Filter, uid string) ([]Transaction, int) {
 }
 
 func (s *Store) listPG(ctx context.Context, f Filter, uid string) ([]Transaction, int) {
-	where := "t.user_id=$1 AND t.deleted_at IS NULL"
+	// Sampah = baris terhapus; list normal = confirmed yang belum dihapus.
+	where := "t.user_id=$1"
+	if f.Deleted {
+		where += " AND t.deleted_at IS NOT NULL"
+	} else {
+		where += " AND t.deleted_at IS NULL AND t.status='confirmed'"
+	}
 	args := []any{uid}
 	if f.Q != "" {
 		args = append(args, "%"+f.Q+"%")
@@ -58,6 +66,10 @@ func (s *Store) listPG(ctx context.Context, f Filter, uid string) ([]Transaction
 	if f.Category != "" {
 		args = append(args, f.Category)
 		where += " AND c.name=$" + itoa(len(args))
+	}
+	if f.Source != "" {
+		args = append(args, f.Source)
+		where += " AND t.source=$" + itoa(len(args))
 	}
 	if !f.From.IsZero() {
 		args = append(args, f.From)
@@ -109,7 +121,7 @@ func (s *Store) All(uid string) []Transaction {
 	rows, err := s.pool.Query(context.Background(), `SELECT t.id::text, t.amount, t.currency, t.occurred_at,
 		COALESCE(m.canonical_name,''), COALESCE(c.name,'Lainnya'), COALESCE(t.note,''), t.source, t.status, COALESCE(t.payment_source,'')
 		FROM transactions t LEFT JOIN merchants m ON m.id=t.merchant_id LEFT JOIN categories c ON c.id=t.category_id
-		WHERE t.user_id=$1 AND t.deleted_at IS NULL ORDER BY t.occurred_at DESC`, uid)
+		WHERE t.user_id=$1 AND t.deleted_at IS NULL AND t.status='confirmed' ORDER BY t.occurred_at DESC`, uid)
 	if err != nil {
 		return []Transaction{}
 	}

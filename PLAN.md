@@ -35,7 +35,7 @@ Spendly adalah aplikasi **pelacak pengeluaran**. Notifikasi transaksi dari bank,
 **Pencatatan Manual**
 - [x] Quick-add (nominal, kategori, merchant, tanggal, catatan)
 - [x] Edit / hapus / undo
-- [x] Pengeluaran berulang (langganan, cicilan)
+- [x] Sampah: transaksi terhapus (soft delete) bisa dipulihkan
 
 **Kategori**
 - [x] Kategori default Indonesia + kategori custom
@@ -262,7 +262,6 @@ transactions        (id, user_id, amount BIGINT, currency, occurred_at, merchant
                      source[manual|email], raw_email_id?, reference_no?,
                      fingerprint? UNIQUE, status[confirmed|needs_review|ignored],
                      duplicate_of?, confidence?, created_at, deleted_at)
-recurring_rules     (user_id, ... )
 ai_calls            (user_id, feature, model, prompt_version, tokens, cost, latency_ms)
 audit_logs
 ```

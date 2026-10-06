@@ -10,7 +10,7 @@ import ConfirmDialog from '@/features/spendly/components/ConfirmDialog';
 import TransactionDetailModal, { EmailDetailModal } from '@/features/spendly/components/TransactionDetailModal';
 import { uniqueCategories } from '@/features/spendly/categories';
 import {
-  getTransactions, deleteTransaction, restoreTransaction, getReviewQueue, confirmReview, ignoreReview,
+  getTransactions, deleteTransaction, restoreTransaction, mergeTransaction, getReviewQueue, confirmReview, ignoreReview,
   getIgnored, correctIgnored, reprocessEmail, getCategories,
 } from '@/features/spendly/api';
 
@@ -18,6 +18,7 @@ const TABS = [
   { id: 'all', title: 'Semua', icon: LayoutList },
   { id: 'review', title: 'Tinjau', icon: Sparkles },
   { id: 'ignored', title: 'Diabaikan', icon: EyeOff },
+  { id: 'trash', title: 'Sampah', icon: Trash2 },
 ];
 
 const RANGES = [
@@ -93,12 +94,20 @@ export default function TransaksiPage() {
   const [cats, setCats] = useState([]);
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
+  const [source, setSource] = useState('');
+  const [min, setMin] = useState('');
+  const [max, setMax] = useState('');
   const [range, setRange] = useState('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [group, setGroup] = useState('day');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [reviewPage, setReviewPage] = useState(1);
+  const [reviewTotal, setReviewTotal] = useState(0);
+  const [ignoredPage, setIgnoredPage] = useState(1);
+  const [ignoredTotal, setIgnoredTotal] = useState(0);
+  const [ignoredEmailTotal, setIgnoredEmailTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [selectedTx, setSelectedTx] = useState(null);
@@ -110,27 +119,38 @@ export default function TransaksiPage() {
   const reqRef = useRef(0);
   const searchedQRef = useRef(q);
 
-  const load = useCallback(async (query = q, category = cat, p = 1, append = false, r = range, f = from, t = to) => {
+  const load = useCallback(async (query = q, category = cat, p = 1, append = false, r = range, f = from, t = to, src = source, lo = min, hi = max) => {
     const reqId = ++reqRef.current;
     setLoading(true);
     try {
       if (tab === 'review') {
-        const data = await getReviewQueue();
+        const d = await getReviewQueue({ page: p, limit: 20 });
         if (reqId !== reqRef.current) return;
-        setItems(data);
-        setTotal(0);
+        const list = d?.items || [];
+        setItems((prev) => (append ? [...prev, ...list] : list));
+        setReviewTotal(d?.meta?.total ?? list.length);
+        setReviewPage(p);
       } else if (tab === 'ignored') {
-        const d = await getIgnored();
+        const d = await getIgnored({ page: p, limit: 20 });
         if (reqId !== reqRef.current) return;
-        setItems(d.transactions || []);
-        setIgnoredEmails(d.emails || []);
+        const tx = d?.transactions || [];
+        const em = d?.emails || [];
+        setItems((prev) => (append ? [...prev, ...tx] : tx));
+        setIgnoredEmails((prev) => (append ? [...prev, ...em] : em));
+        setIgnoredTotal(d?.meta?.tx_total ?? tx.length);
+        setIgnoredEmailTotal(d?.meta?.email_total ?? em.length);
+        setIgnoredPage(p);
       } else {
         const rp = rangeParams(r, f, t);
         const d = await getTransactions({
           ...(query ? { q: query } : {}),
           ...(category ? { category } : {}),
+          ...(src ? { source: src } : {}),
+          ...(lo ? { min: lo } : {}),
+          ...(hi ? { max: hi } : {}),
           ...(rp.from ? { from: rp.from } : {}),
           ...(rp.to ? { to: rp.to } : {}),
+          ...(tab === 'trash' ? { deleted: 1 } : {}),
           page: p, limit: 20,
         });
         if (reqId !== reqRef.current) return;
@@ -141,15 +161,17 @@ export default function TransaksiPage() {
       }
     } catch {
       if (reqId !== reqRef.current) return;
-      if (!append) setItems([]);
+      if (!append) { setItems([]); setIgnoredEmails([]); }
     } finally {
       if (reqId === reqRef.current) setLoading(false);
     }
-  }, [tab, q, cat, range, from, to]);
+  }, [tab, q, cat, range, from, to, source, min, max]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setPage(1);
+    setReviewPage(1);
+    setIgnoredPage(1);
     // Reset items langsung agar tidak flash konten tab lama.
     setItems([]);
     setIgnoredEmails([]);
@@ -162,7 +184,7 @@ export default function TransaksiPage() {
   // Debounce pencarian: tunggu 400ms setelah user berhenti mengetik.
   // Lewati saat q belum berubah agar tidak ada request page-1 ganda di awal.
   useEffect(() => {
-    if (tab !== 'all' || q === searchedQRef.current) return;
+    if ((tab !== 'all' && tab !== 'trash') || q === searchedQRef.current) return;
     const t = setTimeout(() => {
       searchedQRef.current = q;
       load(q, cat, 1);
@@ -247,38 +269,61 @@ export default function TransaksiPage() {
   }
 
   function TxRow({ t }) {
+    const inner = (
+      <>
+        <CategoryBadge name={t.category} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-forest-ink">{t.merchant || t.category || 'Pengeluaran'}</p>
+          {t.note && <p className="truncate text-xs text-lichen">{t.note}</p>}
+          <p className="truncate font-mono text-[11px] text-lichen">
+            {formatDate(t.occurred_at)} · {t.category}
+            {t.payment_source ? ` · ${t.payment_source}` : ''}
+            {tab === 'review' && t.confidence != null ? ` · ${Math.round(t.confidence * 100)}%` : ''}
+          </p>
+        </div>
+        <p className="tnum shrink-0 font-mono text-sm font-medium text-forest-ink">{formatCurrency(t.amount)}</p>
+      </>
+    );
     return (
       <div className="px-4 py-3">
-        <button
-          type="button"
-          onClick={() => setSelectedTx(t)}
-          className="flex w-full cursor-pointer items-center gap-3 text-left"
-        >
-          <CategoryBadge name={t.category} />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-forest-ink">{t.merchant || t.category || 'Pengeluaran'}</p>
-            {t.note && <p className="truncate text-xs text-lichen">{t.note}</p>}
-            <p className="truncate font-mono text-[11px] text-lichen">
-              {formatDate(t.occurred_at)} · {t.category}
-              {t.payment_source ? ` · ${t.payment_source}` : ''}
-              {tab === 'review' && t.confidence != null ? ` · ${Math.round(t.confidence * 100)}%` : ''}
-            </p>
-          </div>
-          <p className="tnum shrink-0 font-mono text-sm font-medium text-forest-ink">{formatCurrency(t.amount)}</p>
-        </button>
+        {tab === 'trash' ? (
+          <div className="flex w-full items-center gap-3 text-left">{inner}</div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSelectedTx(t)}
+            className="flex w-full cursor-pointer items-center gap-3 text-left"
+          >
+            {inner}
+          </button>
+        )}
 
         {tab === 'review' && (
-          <div className="mt-2.5 flex gap-2 pl-[52px]">
-            <button type="button" onClick={() => onConfirm(t)} className="flex-1 rounded-full border border-forest-ink bg-forest-ink py-2 text-xs font-medium text-white cursor-pointer">
-              Benar
-            </button>
-            <button
-              type="button"
-              onClick={() => ignoreReview(t.id).then(() => { toast.success('Diabaikan'); load(q, cat, 1); })}
-              className="flex-1 rounded-full border border-border py-2 text-xs font-medium text-lichen cursor-pointer"
-            >
-              Bukan pengeluaran
-            </button>
+          <div className="mt-2.5 space-y-2 pl-[52px]">
+            {t.duplicate_of && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-saffron/40 bg-butter/40 px-3 py-1.5">
+                <span className="text-[11px] font-medium text-saffron">Kemungkinan duplikat</span>
+                <button
+                  type="button"
+                  onClick={() => mergeTransaction(t.id, t.duplicate_of).then(() => { toast.success('Digabung'); load(q, cat, 1); }).catch(() => toast.error('Gagal menggabung'))}
+                  className="shrink-0 rounded-full border border-saffron px-3 py-1 text-[11px] font-medium text-saffron cursor-pointer"
+                >
+                  Gabung
+                </button>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => onConfirm(t)} className="flex-1 rounded-full border border-forest-ink bg-forest-ink py-2 text-xs font-medium text-white cursor-pointer">
+                Benar
+              </button>
+              <button
+                type="button"
+                onClick={() => ignoreReview(t.id).then(() => { toast.success('Diabaikan'); load(q, cat, 1); })}
+                className="flex-1 rounded-full border border-border py-2 text-xs font-medium text-lichen cursor-pointer"
+              >
+                Bukan pengeluaran
+              </button>
+            </div>
           </div>
         )}
 
@@ -297,6 +342,18 @@ export default function TransaksiPage() {
           <div className="mt-1 flex justify-end">
             <button type="button" onClick={() => askDelete(t)} aria-label="Hapus" className="flex h-7 w-7 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer">
               <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        {tab === 'trash' && (
+          <div className="mt-2.5 flex justify-end pl-[52px]">
+            <button
+              type="button"
+              onClick={() => restoreTransaction(t.id).then(() => { toast.success('Dipulihkan'); load(q, cat, 1); }).catch(() => toast.error('Gagal memulihkan'))}
+              className="inline-flex items-center gap-1.5 rounded-full border border-forest-ink bg-forest-ink px-4 py-2 text-xs font-medium text-white cursor-pointer"
+            >
+              <RotateCcw className="h-3.5 w-3.5" /> Pulihkan
             </button>
           </div>
         )}
@@ -325,7 +382,7 @@ export default function TransaksiPage() {
         ))}
       </div>
 
-      {tab === 'all' && (
+      {(tab === 'all' || tab === 'trash') && (
         <>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lichen" />
@@ -339,8 +396,8 @@ export default function TransaksiPage() {
             />
           </div>
 
-          {/* Filter: rentang tanggal, kategori, pengelompokan */}
-          <div className="grid grid-cols-3 gap-2">
+          {/* Filter: rentang tanggal, kategori, sumber, pengelompokan */}
+          <div className="grid grid-cols-2 gap-2">
             <FilterSelect label="Rentang" aria-label="Rentang tanggal" value={range} onChange={(e) => pickRange(e.target.value)}>
               {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
             </FilterSelect>
@@ -348,9 +405,22 @@ export default function TransaksiPage() {
               <option value="">Semua</option>
               {cats.map((c) => <option key={c} value={c}>{c}</option>)}
             </FilterSelect>
+            <FilterSelect label="Sumber" aria-label="Sumber transaksi" value={source} onChange={(e) => { setSource(e.target.value); load(q, cat, 1, false, range, from, to, e.target.value, min, max); }}>
+              <option value="">Semua</option>
+              <option value="manual">Manual</option>
+              <option value="email">Email</option>
+            </FilterSelect>
             <FilterSelect label="Kelompok" aria-label="Kelompok transaksi" value={group} onChange={(e) => setGroup(e.target.value)}>
               {GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
             </FilterSelect>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input type="number" inputMode="numeric" placeholder="Nominal min" value={min} onValueChange={(v) => setMin(v.replace(/[^0-9]/g, ''))} aria-label="Nominal minimum" className="h-10 flex-1" />
+            <span className="text-xs text-lichen">s/d</span>
+            <Input type="number" inputMode="numeric" placeholder="Nominal maks" value={max} onValueChange={(v) => setMax(v.replace(/[^0-9]/g, ''))} aria-label="Nominal maksimum" className="h-10 flex-1" />
+            <button type="button" onClick={() => load(q, cat, 1, false, range, from, to, source, min, max)} className="h-10 shrink-0 rounded-full border border-forest-ink bg-forest-ink px-3 text-xs font-medium text-white cursor-pointer">
+              Terapkan
+            </button>
           </div>
           {range === 'custom' && (
             <div className="flex items-center gap-2">
@@ -371,14 +441,16 @@ export default function TransaksiPage() {
         </div>
       ) : items.length === 0 && ignoredEmails.length === 0 ? (
         <EmptyState
-          icon={tab === 'review' ? Sparkles : tab === 'ignored' ? Inbox : ReceiptText}
-          title={tab === 'all' ? 'Belum ada transaksi' : tab === 'review' ? 'Tidak ada yang perlu ditinjau' : 'Belum ada yang diabaikan'}
+          icon={tab === 'review' ? Sparkles : tab === 'ignored' ? Inbox : tab === 'trash' ? Trash2 : ReceiptText}
+          title={tab === 'all' ? 'Belum ada transaksi' : tab === 'review' ? 'Tidak ada yang perlu ditinjau' : tab === 'ignored' ? 'Belum ada yang diabaikan' : 'Sampah kosong'}
           description={
             tab === 'all'
               ? 'Catat pengeluaran manual atau hubungkan Gmail agar tercatat otomatis.'
               : tab === 'review'
                 ? 'Semua hasil ekstraksi sudah jelas.'
-                : 'Email yang dianggap bukan pengeluaran akan muncul di sini.'
+                : tab === 'ignored'
+                  ? 'Email yang dianggap bukan pengeluaran akan muncul di sini.'
+                  : 'Transaksi yang dihapus akan muncul di sini dan bisa dipulihkan.'
           }
           action={tab === 'all' && (
             <button type="button" onClick={openQuickAdd} className="mt-1 rounded-full border border-forest-ink bg-forest-ink px-4 py-2 text-xs font-medium text-white cursor-pointer">
@@ -388,7 +460,7 @@ export default function TransaksiPage() {
         />
       ) : (
         <>
-          {tab === 'all' ? (
+          {(tab === 'all' || tab === 'trash') ? (
             <div className="space-y-4">
               {grouped.map((g) => (
                 <div key={g.key}>
@@ -406,7 +478,7 @@ export default function TransaksiPage() {
             items.length > 0 && <Panel className="divide-y divide-border">{items.map((t) => <TxRow key={t.id} t={t} />)}</Panel>
           )}
 
-          {tab === 'all' && items.length < total && (
+          {(tab === 'all' || tab === 'trash') && items.length < total && (
             <button
               type="button"
               onClick={() => load(q, cat, page + 1, true)}
@@ -414,6 +486,17 @@ export default function TransaksiPage() {
               className="w-full rounded-full border border-border py-3 text-xs font-medium text-lichen cursor-pointer disabled:cursor-default disabled:opacity-50"
             >
               Muat lagi ({items.length}/{total})
+            </button>
+          )}
+
+          {tab === 'review' && items.length < reviewTotal && (
+            <button
+              type="button"
+              onClick={() => load(q, cat, reviewPage + 1, true)}
+              disabled={loading}
+              className="w-full rounded-full border border-border py-3 text-xs font-medium text-lichen cursor-pointer disabled:cursor-default disabled:opacity-50"
+            >
+              Muat lagi ({items.length}/{reviewTotal})
             </button>
           )}
 
@@ -444,6 +527,17 @@ export default function TransaksiPage() {
                 ))}
               </Panel>
             </div>
+          )}
+
+          {tab === 'ignored' && (items.length < ignoredTotal || ignoredEmails.length < ignoredEmailTotal) && (
+            <button
+              type="button"
+              onClick={() => load(q, cat, ignoredPage + 1, true)}
+              disabled={loading}
+              className="w-full rounded-full border border-border py-3 text-xs font-medium text-lichen cursor-pointer disabled:cursor-default disabled:opacity-50"
+            >
+              Muat lagi
+            </button>
           )}
         </>
       )}

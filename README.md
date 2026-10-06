@@ -103,7 +103,7 @@ shared wallet, OCR struk.
 
 **Laporan**
 - Dashboard: total bulan ini, per kategori, tren harian, merchant teratas.
-- Daftar transaksi: filter tanggal, kategori, nominal; pencarian; grouping per hari/bulan; pagination.
+- Daftar transaksi: tab Semua/Tinjau/Diabaikan/Sampah; filter tanggal, kategori, sumber, nominal; pencarian; grouping per hari/bulan; pagination.
 - Perbandingan bulan lalu; export CSV.
 
 **PWA**

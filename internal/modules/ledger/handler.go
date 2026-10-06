@@ -26,7 +26,7 @@ func (h *Handler) Mount(r chi.Router) {
 
 func parseFilter(r *http.Request) Filter {
 	q := r.URL.Query()
-	f := Filter{Q: q.Get("q"), Category: q.Get("category")}
+	f := Filter{Q: q.Get("q"), Category: q.Get("category"), Source: q.Get("source"), Deleted: q.Get("deleted") == "1"}
 	if v := q.Get("from"); v != "" {
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
 			f.From = t
