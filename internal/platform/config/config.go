@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -30,6 +31,10 @@ type Config struct {
 	GoogleClientSecret string
 	GoogleRedirectURL  string
 	FrontendURL        string
+	// Self-ping anti-sleep Render free: kosong = mati (dev lokal).
+	// Di Render isi SELF_PING_URL dgn URL publik service.
+	SelfPingURL      string
+	SelfPingInterval time.Duration
 }
 
 func Load() (*Config, error) {
@@ -51,6 +56,8 @@ func Load() (*Config, error) {
 		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleRedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "http://localhost:8080/api/v1/auth/google/callback"),
 		FrontendURL:        getEnv("FRONTEND_URL", ""),
+		SelfPingURL:        getEnv("SELF_PING_URL", os.Getenv("RENDER_EXTERNAL_URL")),
+		SelfPingInterval:   getDuration("SELF_PING_INTERVAL", 10*time.Minute),
 	}
 	if cfg.IsProduction() {
 		var problems []string
@@ -104,6 +111,15 @@ func (c *Config) AIConfigured() bool {
 func getEnv(k, fb string) string {
 	if v, ok := os.LookupEnv(k); ok && v != "" {
 		return v
+	}
+	return fb
+}
+
+func getDuration(k string, fb time.Duration) time.Duration {
+	if v, ok := os.LookupEnv(k); ok && strings.TrimSpace(v) != "" {
+		if d, err := time.ParseDuration(strings.TrimSpace(v)); err == nil && d > 0 {
+			return d
+		}
 	}
 	return fb
 }

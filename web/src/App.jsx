@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { MotionConfig } from 'motion/react';
 import { Toaster } from 'sonner';
 import { useAuthStore } from '@/features/auth/store';
 import TopLoadingBar from '@/components/TopLoadingBar';
@@ -44,7 +45,7 @@ export default function App() {
   }, [initialize]);
 
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       <Toaster position="top-center" richColors closeButton />
       <Router>
         <TopLoadingBar />
@@ -63,6 +64,6 @@ export default function App() {
           </Routes>
         </Suspense>
       </Router>
-    </>
+    </MotionConfig>
   );
 }

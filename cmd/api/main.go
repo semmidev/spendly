@@ -18,6 +18,7 @@ import (
 	"github.com/semmidev/spendly/internal/modules/mailsync"
 	"github.com/semmidev/spendly/internal/platform/config"
 	"github.com/semmidev/spendly/internal/platform/db"
+	"github.com/semmidev/spendly/internal/platform/keepalive"
 	"github.com/semmidev/spendly/internal/platform/security"
 )
 
@@ -81,6 +82,12 @@ func main() {
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	// Anti-sleep Render free: ping /health/live diri sendiri tiap interval.
+	// Mati otomatis bila SELF_PING_URL kosong (dev lokal). Tidak bisa
+	// membangunkan instance yang sudah sleep — pasang cron eksternal juga.
+	keepCtx, keepCancel := context.WithCancel(context.Background())
+	defer keepCancel()
+	keepalive.Start(keepCtx, cfg.SelfPingURL, cfg.SelfPingInterval)
 	go func() {
 		slog.Info("spendly listening", "port", cfg.AppPort)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
