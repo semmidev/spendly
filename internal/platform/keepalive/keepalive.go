@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Start meming endpoint kesehatan sendiri tiap interval agar scheduler
+// Start meming endpoint kesehatan sendiri dan layanan eksternal tiap interval agar scheduler
 // Render free tidak menganggurkan instance (>15 mnt idle = sleep).
 // No-op bila target kosong atau interval <= 0. Berhenti saat ctx dibatalkan.
 // ponytail: satu ticker global, per-route jitter bila butuh sebar beban.
@@ -17,10 +17,13 @@ func Start(ctx context.Context, target string, interval time.Duration) {
 	if target == "" || interval <= 0 {
 		return
 	}
-	url := target + "/health/live"
+	urls := []string{
+		target + "/health/live",
+		"https://info-gizi-bumil-remaja.onrender.com",
+	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	t := time.NewTicker(interval)
-	slog.Info("self-ping aktif", "url", url, "interval", interval.String())
+	slog.Info("self-ping aktif", "urls", urls, "interval", interval.String())
 	go func() {
 		defer t.Stop()
 		for {
@@ -28,20 +31,22 @@ func Start(ctx context.Context, target string, interval time.Duration) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-				if err != nil {
-					continue
-				}
-				resp, err := client.Do(req)
-				if err != nil {
-					slog.Warn("self-ping gagal", "error", err)
-					continue
-				}
-				resp.Body.Close()
-				if resp.StatusCode >= 400 {
-					slog.Warn("self-ping status buruk", "status", resp.Status)
-				} else {
-					slog.Debug("self-ping ok", "status", resp.Status)
+				for _, u := range urls {
+					req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+					if err != nil {
+						continue
+					}
+					resp, err := client.Do(req)
+					if err != nil {
+						slog.Warn("ping keepalive gagal", "url", u, "error", err)
+						continue
+					}
+					resp.Body.Close()
+					if resp.StatusCode >= 400 {
+						slog.Warn("ping keepalive status buruk", "url", u, "status", resp.Status)
+					} else {
+						slog.Debug("ping keepalive ok", "url", u, "status", resp.Status)
+					}
 				}
 			}
 		}
