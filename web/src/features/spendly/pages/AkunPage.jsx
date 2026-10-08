@@ -342,14 +342,14 @@ export default function AkunPage() {
     try {
       await client.delete('/users/me');
       await logout();
-      navigate('/login', { replace: true });
+      navigate('/', { replace: true });
     } catch (e) { toast.error(e?.response?.data?.message || 'Gagal hapus akun'); }
     finally { setBusy(''); }
   }
 
   async function onLogout() {
     await logout();
-    navigate('/login', { replace: true });
+    navigate('/', { replace: true });
   }
 
   const initial = (user?.name || user?.email || 'S')[0].toUpperCase();
