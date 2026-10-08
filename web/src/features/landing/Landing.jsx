@@ -131,7 +131,6 @@ export default function Landing() {
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-4 pt-28 pb-16 text-center sm:px-6 sm:pt-36">
         <Reveal>
-          <p className="text-[17px] font-semibold text-primary">Spendly untuk iPhone</p>
           <h1 className="mx-auto mt-3 max-w-3xl text-balance text-5xl leading-[1.05] font-bold tracking-tight sm:text-6xl lg:text-7xl">
             Uangmu habis ke mana?
           </h1>
