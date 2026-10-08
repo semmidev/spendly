@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import MobileLayout from '@/components/MobileLayout';
 
 import Login from '@/features/auth/pages/Login';
+import Landing from '@/features/landing/Landing';
 
 const BerandaPage = lazy(() => import('@/features/spendly/pages/BerandaPage'));
 const TransaksiPage = lazy(() => import('@/features/spendly/pages/TransaksiPage'));
@@ -87,7 +88,7 @@ export default function App() {
       <Router>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
-            <Route path="/" element={<Navigate to="/beranda" replace />} />
+            <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route element={<PrivateRoute><MobileLayout /></PrivateRoute>}>
               <Route path="/beranda" element={<BerandaPage />} />
