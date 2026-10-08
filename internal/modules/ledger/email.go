@@ -48,8 +48,10 @@ func itoa64(v int64) string { return strconv.FormatInt(v, 10) }
 // CreateEmail: idempoten. Bila raw_email_id diberikan, upsert per email
 // (satu email = maksimal satu transaksi) sehingga proses ulang tidak
 // menduplikasi. Tanpa raw_email_id, dedup via fingerprint UNIQUE.
+// Transaksi yang sudah dihapus user (Sampah) TIDAK PERNAH dihidupkan lagi:
+// pemrosesan ulang email yang sama di-skip agar yang dihapus tetap hilang.
 // Return (id, true) bila baris dibuat/diperbarui; ("", false) bila dianggap
-// duplikat (bentrok fingerprint dengan email lain).
+// duplikat atau di-skip karena sudah dihapus.
 func (s *Store) CreateEmail(in EmailInput, uid string) (string, bool) {
 	ctx := context.Background()
 	catID, catName := s.resolveCategory(ctx, uid, in.Category)
@@ -68,7 +70,15 @@ func (s *Store) CreateEmail(in EmailInput, uid string) (string, bool) {
 	}
 
 	// Jalur email: upsert berdasarkan raw_email_id (uniqueness dijamin index).
+	// Baris yang sudah dihapus user di-skip — jangan hidupkan lagi.
 	if in.RawEmailID != "" {
+		var wasDeleted bool
+		_ = s.pool.QueryRow(ctx, `SELECT true FROM transactions
+			WHERE raw_email_id=$1::uuid AND user_id=$2 AND deleted_at IS NOT NULL`,
+			in.RawEmailID, uid).Scan(&wasDeleted)
+		if wasDeleted {
+			return "", false
+		}
 		var out string
 		err := s.pool.QueryRow(ctx, `INSERT INTO transactions
 			(id, user_id, amount, currency, occurred_at, merchant_id, category_id,
@@ -81,7 +91,7 @@ func (s *Store) CreateEmail(in EmailInput, uid string) (string, bool) {
 				payment_source=EXCLUDED.payment_source, note=EXCLUDED.note,
 				reference_no=EXCLUDED.reference_no, fingerprint=EXCLUDED.fingerprint,
 				status=EXCLUDED.status, duplicate_of=EXCLUDED.duplicate_of,
-				confidence=EXCLUDED.confidence, deleted_at=NULL
+				confidence=EXCLUDED.confidence
 			RETURNING id::text`,
 			id.String(), uid, in.Amount, in.Currency, in.OccurredAt.UTC(),
 			merchID, catID, nullStr(in.Source), in.Note,
@@ -90,18 +100,13 @@ func (s *Store) CreateEmail(in EmailInput, uid string) (string, bool) {
 		if err == nil && out != "" {
 			return out, true
 		}
-		// Gagal (mis. bentrok fingerprint unik dengan transaksi email lain):
-		// coba pulihkan record lama yang dihapus, kalau tidak ada jangan insert
-		// baris baru untuk email ini.
-		if in.Fingerprint != "" {
-			if rid, rerr := s.restoreDeleted(ctx, uid, in, catID, merchID, status); rerr == nil && rid != "" {
-				return rid, true
-			}
-		}
+		// Gagal (mis. bentrok fingerprint unik, termasuk dengan baris yang
+		// sudah dihapus): skip, jangan insert baris baru untuk email ini.
 		return "", false
 	}
 
-	// Tanpa raw_email_id: dedup via fingerprint UNIQUE.
+	// Tanpa raw_email_id: dedup via fingerprint UNIQUE (baris terhapus ikut
+	// menahan fingerprint sehingga tidak bisa hidup lagi via jalur ini).
 	var out string
 	err := s.pool.QueryRow(ctx, `INSERT INTO transactions
 		(id, user_id, amount, currency, occurred_at, merchant_id, category_id,
@@ -116,28 +121,7 @@ func (s *Store) CreateEmail(in EmailInput, uid string) (string, bool) {
 	if err == nil && out != "" {
 		return out, true
 	}
-	if in.Fingerprint != "" {
-		if rid, rerr := s.restoreDeleted(ctx, uid, in, catID, merchID, status); rerr == nil && rid != "" {
-			return rid, true
-		}
-	}
 	return "", false
-}
-
-// restoreDeleted mengaktifkan kembali transaksi (fingerprint sama) yang dihapus
-// manual, sekaligus menimpa field dengan hasil ekstraksi terbaru.
-func (s *Store) restoreDeleted(ctx context.Context, uid string, in EmailInput, catID, merchID any, status string) (string, error) {
-	var id string
-	err := s.pool.QueryRow(ctx, `UPDATE transactions SET
-		deleted_at=NULL, amount=$3, currency=$4, occurred_at=$5, merchant_id=$6, category_id=$7,
-		payment_source=$8, note=$9, source='email', raw_email_id=$10::uuid, reference_no=$11,
-		status=$12, duplicate_of=$13::uuid, confidence=$14
-		WHERE user_id=$1 AND fingerprint=$2 AND deleted_at IS NOT NULL
-		RETURNING id::text`,
-		uid, in.Fingerprint, in.Amount, in.Currency, in.OccurredAt.UTC(),
-		merchID, catID, nullStr(in.Source), in.Note, nullStr(in.RawEmailID),
-		nullStr(in.ReferenceNo), status, nullStr(in.DuplicateOf), in.Confidence).Scan(&id)
-	return id, err
 }
 
 // FindDuplicate: nominal sama + waktu ±10 mnt + merchant mirip (PLAN §5).

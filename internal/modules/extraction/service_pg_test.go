@@ -112,26 +112,27 @@ func TestPipelineIntegration(t *testing.T) {
 		t.Fatalf("bad amount: amount=%d status=%q", amt, status)
 	}
 
-	// 6. transaksi dihapus manual → dipulihkan (id sama) saat raw_email yang
-	//    sama diproses ulang (upsert per raw_email_id).
+	// 6. transaksi dihapus manual → TIDAK dihidupkan lagi saat raw_email yang
+	//    sama diproses ulang (skip; raw ditandai dedup, tidak ada baris baru).
 	var tx1 string
 	_ = pool.QueryRow(ctx, `SELECT id::text FROM transactions WHERE raw_email_id=$1::uuid`, raw).Scan(&tx1)
 	if _, err := pool.Exec(ctx, `UPDATE transactions SET deleted_at=now() WHERE id=$1::uuid`, tx1); err != nil {
 		t.Fatalf("soft delete: %v", err)
 	}
 	if err := svc.apply(ctx, raw, uid, time.Now(), res, llm.Usage{}, false); err != nil {
-		t.Fatalf("apply restore: %v", err)
+		t.Fatalf("apply reprocess: %v", err)
 	}
-	var gotID string
 	var deletedAt any
-	if err := pool.QueryRow(ctx, `SELECT id::text, deleted_at FROM transactions WHERE id=$1::uuid`, tx1).Scan(&gotID, &deletedAt); err != nil {
-		t.Fatalf("select restored: %v", err)
+	if err := pool.QueryRow(ctx, `SELECT deleted_at FROM transactions WHERE id=$1::uuid`, tx1).Scan(&deletedAt); err != nil {
+		t.Fatalf("select deleted: %v", err)
 	}
-	if deletedAt != nil {
-		t.Fatalf("transaksi tidak dipulihkan: deleted_at=%v", deletedAt)
+	if deletedAt == nil {
+		t.Fatalf("transaksi yang dihapus hidup lagi (deleted_at NULL)")
 	}
-	if gotID != tx1 {
-		t.Fatalf("transaksi dipulihkan sebagai baris baru: %s != %s", gotID, tx1)
+	var rawStatus string
+	_ = pool.QueryRow(ctx, `SELECT status FROM raw_emails WHERE id=$1::uuid`, raw).Scan(&rawStatus)
+	if rawStatus != "dedup" {
+		t.Fatalf("status raw=%q mau dedup", rawStatus)
 	}
 
 	// 7. raw_email_id unik: proses ulang berulang tetap satu transaksi.
@@ -147,11 +148,10 @@ func TestPipelineIntegration(t *testing.T) {
 	}
 }
 
-// TestReenableDeletedWithoutAI: email yang transaksinya dihapus user
-// dipulihkan dari cache ekstraksi (content_hash) — tanpa panggilan AI/parser
-// ulang. Bukti: extractions.model berawalan "cache:" dan baris transaksi
-// yang sama diaktifkan lagi (deleted_at NULL, id sama).
-func TestReenableDeletedWithoutAI(t *testing.T) {
+// TestDeletedStaysDeletedOnReprocess: email yang transaksinya dihapus user
+// TIDAK diaktifkan lagi saat diproses ulang — di-skip (raw ditandai dedup,
+// tidak ada baris baru). Pemulihan hanya lewat tombol "Pulihkan" user.
+func TestDeletedStaysDeletedOnReprocess(t *testing.T) {
 	pool := testutil.StartPostgres(t)
 	ctx := context.Background()
 	cfg := &config.Config{AIModel: "test"} // tanpa API key → ai nil
@@ -180,14 +180,13 @@ func TestReenableDeletedWithoutAI(t *testing.T) {
 	_ = pool.QueryRow(ctx, `SELECT id::text FROM transactions WHERE raw_email_id=$1::uuid`, raw).Scan(&txID)
 
 	// User menghapus transaksi; sync berikutnya me-reset raw ke fetched
-	// (SQL sama persis seperti runSync) lalu memproses ulang.
+	// lalu memproses ulang — transaksi harus TETAP terhapus.
 	if _, err := pool.Exec(ctx, `UPDATE transactions SET deleted_at=now() WHERE id=$1::uuid`, txID); err != nil {
 		t.Fatalf("soft delete: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE raw_emails r SET status='fetched'
 		WHERE r.connection_id=$1::uuid AND r.status <> 'fetched'
-		AND r.received_at >= now() - interval '30 days'
-		AND EXISTS (SELECT 1 FROM transactions t WHERE t.raw_email_id=r.id AND t.deleted_at IS NOT NULL)`, connID); err != nil {
+		AND r.received_at >= now() - interval '30 days'`, connID); err != nil {
 		t.Fatalf("reset: %v", err)
 	}
 	fetched := false
@@ -210,9 +209,19 @@ func TestReenableDeletedWithoutAI(t *testing.T) {
 	var gotID string
 	var deletedAt any
 	if err := pool.QueryRow(ctx, `SELECT id::text, deleted_at FROM transactions WHERE id=$1::uuid`, txID).Scan(&gotID, &deletedAt); err != nil {
-		t.Fatalf("select restored: %v", err)
+		t.Fatalf("select deleted: %v", err)
 	}
-	if gotID != txID || deletedAt != nil {
-		t.Fatalf("tidak di-enable-kan lagi: id=%s deleted_at=%v", gotID, deletedAt)
+	if gotID != txID || deletedAt == nil {
+		t.Fatalf("transaksi yang dihapus hidup lagi: id=%s deleted_at=%v", gotID, deletedAt)
+	}
+	var cnt int
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM transactions WHERE raw_email_id=$1::uuid`, raw).Scan(&cnt)
+	if cnt != 1 {
+		t.Fatalf("baris baru dibuat untuk email yang dihapus: count=%d", cnt)
+	}
+	var rawStatus string
+	_ = pool.QueryRow(ctx, `SELECT status FROM raw_emails WHERE id=$1::uuid`, raw).Scan(&rawStatus)
+	if rawStatus != "dedup" {
+		t.Fatalf("status raw=%q mau dedup", rawStatus)
 	}
 }

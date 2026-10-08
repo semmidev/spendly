@@ -53,9 +53,9 @@ function framePage(imgURL) {
 *{box-sizing:border-box}body{margin:0;background:transparent;font-family:-apple-system,'SF Pro Text',Inter,sans-serif}
 .stage{width:520px;height:1000px;position:relative}
 .phone{position:absolute;left:49px;top:40px;width:421px;padding:14px;background:linear-gradient(145deg,#4a4a4e,#17171a 60%,#333336);border-radius:66px;box-shadow:0 40px 80px -20px rgba(0,0,0,.45),0 12px 24px rgba(0,0,0,.25)}
-.screen{position:relative;border-radius:52px;overflow:hidden;background:#f7f6f2;line-height:0}
+.screen{position:relative;border-radius:52px;overflow:hidden;background:#f2f2f7;line-height:0}
 .screen img{width:393px;height:798px;object-fit:cover;object-position:top;display:block}
-.strip{height:54px;background:#f7f6f2;display:flex;align-items:center;justify-content:space-between;padding:14px 36px 0;color:#001f1f;line-height:1}
+.strip{height:54px;background:#f2f2f7;display:flex;align-items:center;justify-content:space-between;padding:14px 36px 0;color:#000;line-height:1}
 .strip .time{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .strip .sic{display:flex;align-items:center;gap:6px}
 .island{position:absolute;top:22px;left:50%;transform:translateX(-50%);width:112px;height:32px;background:#000;border-radius:20px;line-height:0}
@@ -67,9 +67,9 @@ function framePage(imgURL) {
 </style></head><body><div class="stage"><div class="phone">
 <div class="btn btn-mute"></div><div class="btn btn-vup"></div><div class="btn btn-vdn"></div><div class="btn btn-pwr"></div>
 <div class="screen"><div class="strip"><span class="time">9:41</span><span class="sic">
-<svg width="18" height="12" viewBox="0 0 18 12" fill="#001f1f"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
-<svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="#001f1f" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="10" r="1.1" fill="#001f1f" stroke="none"/><path d="M5.7 8.1a3.3 3.3 0 0 1 4.6 0"/><path d="M3.8 6.2a6 6 0 0 1 8.4 0"/><path d="M1.9 4.3a8.6 8.6 0 0 1 12.2 0"/></svg>
-<svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#001f1f" opacity=".5"/><rect x="2" y="2" width="15" height="8" rx="2" fill="#001f1f"/><path d="M23.5 4v4a2 2 0 0 0 0-4z" fill="#001f1f" opacity=".5"/></svg>
+<svg width="18" height="12" viewBox="0 0 18 12" fill="#000"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+<svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="10" r="1.1" fill="#000" stroke="none"/><path d="M5.7 8.1a3.3 3.3 0 0 1 4.6 0"/><path d="M3.8 6.2a6 6 0 0 1 8.4 0"/><path d="M1.9 4.3a8.6 8.6 0 0 1 12.2 0"/></svg>
+<svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#000" opacity=".5"/><rect x="2" y="2" width="15" height="8" rx="2" fill="#000"/><path d="M23.5 4v4a2 2 0 0 0 0-4z" fill="#000" opacity=".5"/></svg>
 </span></div><img src="${imgURL}"><div class="island"></div></div></div></div></body></html>`;
 }
 
@@ -113,8 +113,30 @@ if ((list?.meta?.total ?? 0) === 0) {
   }
   console.log('seed: 8 transaksi demo');
 
+  // Dua transaksi khusus dibuat via API (agar merchant/kategori ter-resolve
+  // oleh aplikasi), lalu statusnya di-flip via SQL — kolom transactions
+  // memakai category_id/merchant_id, bukan teks (lihat 00001_init.sql).
+  const reviewTx = await (await ctx.request.post(`${BASE}/api/v1/transactions`, {
+    data: { amount: 125000, category: 'Tagihan', merchant: 'BCA Mobile', note: 'Tagihan Kartu Kredit', occurred_at: new Date(Date.now() - 864e5).toISOString().slice(0, 10) },
+    headers,
+  })).json();
+  const trashTx = await (await ctx.request.post(`${BASE}/api/v1/transactions`, {
+    data: { amount: 45000, category: 'Makanan', merchant: 'Starbucks', note: 'Kopi salah beli', occurred_at: new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10) },
+    headers,
+  })).json();
+  const uuid = (v) => (/^[0-9a-f-]{36}$/i.test(v || '') ? v : null);
+  // POST /transactions mengembalikan { data: { transaction: { id, ... } } }.
+  const reviewId = uuid(reviewTx?.data?.transaction?.id);
+  const trashId = uuid(trashTx?.data?.transaction?.id);
+  if (!reviewId || !trashId) throw new Error('seed gagal: id transaksi khusus tidak valid');
+  console.log('seed: 2 transaksi khusus (tinjau + sampah)');
+
   try {
     const pgContainer = process.env.PREVIEW_PG || 'spendly-postgres-1';
+    // Skema ikut migrasi asli: sender_registry (global, seed 00016) +
+    // user_senders untuk pilihan user; sync_jobs pakai kolom
+    // new_count/gated_count/extracted_count (00007); sampah =
+    // deleted_at, bukan status (store.go).
     const sql = `
       DO $$
       DECLARE
@@ -129,39 +151,38 @@ if ((list?.meta?.total ?? 0) === 0) {
 
           v_conn_id := '11111111-1111-1111-1111-111111111111';
 
-          INSERT INTO senders (connection_id, email_domain, name, is_active)
-          VALUES 
-            (v_conn_id, 'bca.co.id', 'Bank BCA', true),
-            (v_conn_id, 'gofood.co.id', 'GoFood', true),
-            (v_conn_id, 'tokopedia.com', 'Tokopedia', true)
+          INSERT INTO user_senders (connection_id, sender_domain, allowed)
+          VALUES
+            (v_conn_id, 'bca.co.id', true),
+            (v_conn_id, 'gopay.co.id', true),
+            (v_conn_id, 'tokopedia.com', true)
           ON CONFLICT DO NOTHING;
 
           INSERT INTO raw_emails (id, connection_id, gmail_message_id, content_hash, status, subject, sender_domain, received_at)
           VALUES ('22222222-2222-2222-2222-222222222222', v_conn_id, 'msg-review-1', 'hash-rev-1', 'parsed', 'Struk Pembayaran BCA Mobile', 'bca.co.id', NOW() - INTERVAL '1 day')
           ON CONFLICT DO NOTHING;
 
-          INSERT INTO transactions (user_id, amount, currency, category, merchant, note, occurred_at, source, raw_email_id, status, confidence)
-          VALUES (v_uid, 125000, 'IDR', 'Tagihan', 'BCA Mobile', 'Tagihan Kartu Kredit', NOW() - INTERVAL '1 day', 'email', '22222222-2222-2222-2222-222222222222', 'needs_review', 0.72)
-          ON CONFLICT DO NOTHING;
+          UPDATE transactions SET status = 'needs_review', confidence = 0.72, raw_email_id = '22222222-2222-2222-2222-222222222222'
+          WHERE id = '${reviewId}'::uuid AND user_id = v_uid;
+
+          UPDATE transactions SET deleted_at = now()
+          WHERE id = '${trashId}'::uuid AND user_id = v_uid;
 
           INSERT INTO raw_emails (id, connection_id, gmail_message_id, content_hash, status, subject, sender_domain, ignore_reason, received_at)
           VALUES ('33333333-3333-3333-3333-333333333333', v_conn_id, 'msg-ignored-1', 'hash-ign-1', 'gated_out', 'Promo Tokopedia Flash Sale', 'tokopedia.com', 'promo', NOW() - INTERVAL '2 days')
           ON CONFLICT DO NOTHING;
 
-          INSERT INTO transactions (user_id, amount, currency, category, merchant, note, occurred_at, source, status)
-          VALUES (v_uid, 45000, 'IDR', 'Makanan', 'Starbucks', 'Kopi salah beli', NOW() - INTERVAL '3 days', 'manual', 'deleted')
-          ON CONFLICT DO NOTHING;
-
-          INSERT INTO sync_jobs (id, connection_id, user_id, status, mode, scan_window, emails_total, emails_new, emails_gated, emails_extracted, created_at, finished_at)
-          VALUES ('44444444-4444-4444-4444-444444444444', v_conn_id, v_uid, 'done', 'backfill', '30d', 150, 42, 12, 30, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour 58 mins')
+          INSERT INTO sync_jobs (id, user_id, connection_id, status, mode, processed, total, new_count, gated_count, extracted_count, created_at, finished_at)
+          VALUES ('44444444-4444-4444-4444-444444444444', v_uid, v_conn_id, 'done', 'backfill', 150, 150, 42, 12, 30, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour 58 mins')
           ON CONFLICT DO NOTHING;
         END IF;
       END $$;
     `;
-    execSync(`docker exec -i ${pgContainer} psql -U spendly -d spendly_preview`, { input: sql, stdio: ['pipe', 'ignore', 'ignore'] });
+    execSync(`docker exec -i ${pgContainer} psql -U spendly -d spendly_preview`, { input: sql, stdio: ['pipe', 'ignore', 'pipe'] });
     console.log('seed: data tambahan (tinjau, diabaikan, sampah, sinkron, riwayat)');
   } catch (e) {
-    console.warn('seed SQL ekstra dilewati:', e.message);
+    const detail = e.stderr?.toString().trim().split('\n').slice(-3).join(' | ') || e.message;
+    throw new Error(`seed SQL ekstra gagal: ${detail}`);
   }
 } else {
   console.log('seed: dilewati (sudah ada data)');

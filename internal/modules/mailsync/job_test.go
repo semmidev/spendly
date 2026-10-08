@@ -199,9 +199,10 @@ func TestSyncJobCancel(t *testing.T) {
 	}
 }
 
-// TestRestoreScopedToWindow: sync dengan window 1d hanya memulihkan email yang
-// transaksinya dihapus di dalam jendela; email lama di luar jendela tetap dibiarkan.
-func TestRestoreScopedToWindow(t *testing.T) {
+// TestDeletedSkippedOnSync: sync TIDAK mengembalikan email yang transaksinya
+// dihapus ke antrean — yang dihapus tetap hilang, tidak diproses atau
+// diaktifkan lagi. Berlaku untuk seluruh jendela scan.
+func TestDeletedSkippedOnSync(t *testing.T) {
 	svc, uid, connID := setupJobTest(t)
 	ctx := context.Background()
 
@@ -231,11 +232,16 @@ func TestRestoreScopedToWindow(t *testing.T) {
 		_ = svc.pool.QueryRow(ctx, `SELECT status FROM raw_emails WHERE connection_id=$1::uuid AND gmail_message_id=$2`, connID, id).Scan(&s)
 		return s
 	}
-	if status("gwin") != "fetched" {
-		t.Fatalf("email dalam jendela tidak dipulihkan: status=%s", status("gwin"))
+	if status("gwin") != "extracted" {
+		t.Fatalf("email terhapus dalam jendela diproses lagi: status=%s", status("gwin"))
 	}
 	if status("gout") != "extracted" {
-		t.Fatalf("email di luar jendela ikut dipulihkan: status=%s", status("gout"))
+		t.Fatalf("email terhapus di luar jendela diproses lagi: status=%s", status("gout"))
+	}
+	var alive int
+	_ = svc.pool.QueryRow(ctx, `SELECT COUNT(*) FROM transactions WHERE deleted_at IS NULL`).Scan(&alive)
+	if alive != 0 {
+		t.Fatalf("transaksi terhapus hidup lagi: %d baris aktif", alive)
 	}
 }
 
