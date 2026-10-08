@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import { Link } from 'react-router-dom';
 import { Wallet, Mail, ShieldCheck, PencilLine } from 'lucide-react';
 import { fadeUp, stagger } from '@/components/animate';
 
@@ -80,8 +81,9 @@ export default function Login() {
             Masuk dengan Google
           </motion.a>
           <p className="mt-4 px-4 text-center text-[13px] leading-relaxed text-muted-foreground">
-            Dengan masuk, kamu menyetujui <span className="text-primary">Syarat Penggunaan</span> dan{' '}
-            <span className="text-primary">Kebijakan Privasi</span> Spendly.
+            Dengan masuk, kamu menyetujui{' '}
+            <Link to="/terms" className="text-primary">Syarat Penggunaan</Link> dan{' '}
+            <Link to="/privacy" className="text-primary">Kebijakan Privasi</Link> Spendly.
           </p>
         </motion.div>
 

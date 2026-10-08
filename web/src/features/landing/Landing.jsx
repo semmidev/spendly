@@ -225,7 +225,9 @@ export default function Landing() {
           </p>
           <GoogleCTA className="mt-8" />
           <p className="mt-4 text-[13px] text-muted-foreground">
-            Dengan masuk, kamu menyetujui Syarat Penggunaan dan Kebijakan Privasi Spendly.
+            Dengan masuk, kamu menyetujui{' '}
+            <Link to="/terms" className="text-primary">Syarat Penggunaan</Link> dan{' '}
+            <Link to="/privacy" className="text-primary">Kebijakan Privasi</Link> Spendly.
           </p>
         </Reveal>
       </section>
@@ -233,11 +235,17 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-border/60">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-8 text-center text-[13px] text-muted-foreground sm:flex-row sm:px-6 sm:text-left">
-          <span className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-white">
-              <Wallet className="h-3.5 w-3.5" strokeWidth={2} />
+          <span className="flex flex-col items-center gap-2 sm:items-start">
+            <span className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-white">
+                <Wallet className="h-3.5 w-3.5" strokeWidth={2} />
+              </span>
+              © 2026 Spendly · v0.1.0
             </span>
-            © 2026 Spendly · v0.1.0
+            <span className="flex items-center gap-4">
+              <Link to="/privacy" className="text-primary">Kebijakan Privasi</Link>
+              <Link to="/terms" className="text-primary">Syarat Penggunaan</Link>
+            </span>
           </span>
           <span className="flex items-center gap-1">
             Made with <span className="text-red-500">❤️</span> by

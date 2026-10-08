@@ -14,6 +14,8 @@ const TransaksiPage = lazy(() => import('@/features/spendly/pages/TransaksiPage'
 const LaporanPage = lazy(() => import('@/features/spendly/pages/LaporanPage'));
 const AkunPage = lazy(() => import('@/features/spendly/pages/AkunPage'));
 const SyncDetailPage = lazy(() => import('@/features/spendly/pages/SyncDetailPage'));
+const Privacy = lazy(() => import('@/features/legal/Privacy'));
+const Terms = lazy(() => import('@/features/legal/Terms'));
 
 // Skeleton ringan non-blocking untuk boot auth / lazy route pertama.
 function BootSkeleton() {
@@ -90,6 +92,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
             <Route element={<PrivateRoute><MobileLayout /></PrivateRoute>}>
               <Route path="/beranda" element={<BerandaPage />} />
               <Route path="/transaksi" element={<TransaksiPage />} />
