@@ -10,23 +10,23 @@ import {
   Wallet,
 } from 'lucide-react';
 
-// Warna & ikon per kategori — taksonomi pastel ala Lattice.
-// `soft` = latar pastel badge; `color` = aksen vivid (khusus data/bar).
+// Warna & ikon per kategori — tint sistem iOS 12%.
+// `soft` = latar badge; `color` = aksen vivid (khusus data/bar).
 export const CATEGORY_META = {
-  Makanan: { color: '#a36a14', soft: '#fff3c2', Icon: Utensils },
-  Transport: { color: '#2a4e1c', soft: '#e4f7f9', Icon: Car },
-  Belanja: { color: '#7a2251', soft: '#fde5ff', Icon: ShoppingBag },
-  Tagihan: { color: '#003d3d', soft: '#e1e1fa', Icon: ReceiptText },
-  Hiburan: { color: '#652ea3', soft: '#eff5ce', Icon: Clapperboard },
-  Kesehatan: { color: '#515c0b', soft: '#f8fbe7', Icon: HeartPulse },
-  Transfer: { color: '#455252', soft: '#fcf2fe', Icon: ArrowLeftRight },
-  Lainnya: { color: '#6a7878', soft: '#f7f6f2', Icon: Package },
+  Makanan: { color: '#ff9f0a', soft: 'rgb(255 159 10 / 0.12)', Icon: Utensils },
+  Transport: { color: '#007aff', soft: 'rgb(0 122 255 / 0.12)', Icon: Car },
+  Belanja: { color: '#af52de', soft: 'rgb(175 82 222 / 0.12)', Icon: ShoppingBag },
+  Tagihan: { color: '#5ac8fa', soft: 'rgb(90 200 250 / 0.12)', Icon: ReceiptText },
+  Hiburan: { color: '#ff375f', soft: 'rgb(255 55 95 / 0.12)', Icon: Clapperboard },
+  Kesehatan: { color: '#34c759', soft: 'rgb(52 199 89 / 0.12)', Icon: HeartPulse },
+  Transfer: { color: '#8e8e93', soft: 'rgb(142 142 147 / 0.12)', Icon: ArrowLeftRight },
+  Lainnya: { color: '#8e8e93', soft: 'rgb(142 142 147 / 0.12)', Icon: Package },
 };
 
 export const DEFAULT_CATEGORIES = Object.keys(CATEGORY_META);
 
 export function catMeta(name) {
-  return CATEGORY_META[name] || { color: '#2a4e1c', soft: '#e4f7f9', Icon: Wallet };
+  return CATEGORY_META[name] || { color: '#007aff', soft: 'rgb(0 122 255 / 0.12)', Icon: Wallet };
 }
 
 // Buang duplikat & kosong, pertahankan urutan default lebih dulu.

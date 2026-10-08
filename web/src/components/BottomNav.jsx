@@ -18,7 +18,11 @@ export default function BottomNav() {
           return (
             <NavLink key={item.id} to={item.path} className="flex flex-col items-center gap-0.5 py-1">
               <span className={cn(active ? 'text-primary' : 'text-muted-foreground')}>
-                {resolveIcon(item.icon, { className: 'h-6 w-6', strokeWidth: active ? 2 : 1.6 })}
+                {resolveIcon(item.icon, {
+                  className: 'h-6 w-6',
+                  strokeWidth: active ? 2 : 1.6,
+                  fill: active ? 'currentColor' : 'none',
+                })}
               </span>
               <span className={cn('text-[10px]', active ? 'font-semibold text-primary' : 'font-normal text-muted-foreground')}>
                 {item.title}

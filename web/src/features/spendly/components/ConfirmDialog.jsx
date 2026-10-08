@@ -49,15 +49,15 @@ export default function ConfirmDialog({
             </label>
           )}
           </div>
-          <div className="flex border-t border-border">
-            <AlertDialog.Close className="h-11 flex-1 text-[17px] font-normal text-primary transition-colors active:bg-secondary cursor-pointer">
+          <div className="flex items-stretch border-t border-border">
+            <AlertDialog.Close className="min-h-11 flex-1 px-2 py-2.5 text-[15px] leading-tight font-normal text-primary transition-colors active:bg-secondary cursor-pointer">
               {cancelLabel}
             </AlertDialog.Close>
             <button
               type="button"
               onClick={onConfirm}
               disabled={!matched}
-              className="h-11 flex-1 border-l border-border text-[17px] font-semibold text-destructive transition-colors active:bg-secondary disabled:opacity-40 cursor-pointer"
+              className="min-h-11 flex-1 border-l border-border px-2 py-2.5 text-[15px] leading-tight font-semibold text-destructive transition-colors active:bg-secondary disabled:opacity-40 cursor-pointer"
             >
               {confirmLabel}
             </button>

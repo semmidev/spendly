@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Plus, RefreshCw, ArrowRight, Wallet } from 'lucide-react';
+import { Plus, RefreshCw, ArrowRight, Wallet, Moon, Sun } from 'lucide-react';
+import { getTheme, toggleTheme } from '@/lib/theme';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -10,7 +11,7 @@ import { Panel, SectionTitle, CategoryBadge, EmptyState } from '@/features/spend
 import { catMeta } from '@/features/spendly/categories';
 import { useAuthStore } from '@/features/auth/store';
 import { getSummary, getReport, getReviewQueue } from '@/features/spendly/api';
-import { EASE_OUT, fadeUp, stagger, useCountUp } from '@/components/animate';
+import { EASE_OUT, useCountUp } from '@/components/animate';
 
 const CHART = { total: { label: 'Total', color: 'var(--chart-1)' } };
 
@@ -22,6 +23,7 @@ export default function BerandaPage() {
   const [compare, setCompare] = useState(null);
   const [reviewCount, setReviewCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [dark, setDark] = useState(() => getTheme() === 'dark');
 
   async function load() {
     setLoading(true);
@@ -57,27 +59,38 @@ export default function BerandaPage() {
   const diff = compare ? total - (compare.last_month || 0) : 0;
 
   return (
-    <motion.div className="space-y-6" variants={stagger(0.08)} initial="hidden" animate="show">
+    <div className="space-y-6">
       {/* Greeting ala iOS: large title + avatar akun */}
-      <motion.div variants={fadeUp} className="flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <div className="min-w-0">
           <p className="text-[13px] text-muted-foreground">{getGreeting()}</p>
           <h1 className="truncate text-[34px] leading-tight font-bold tracking-tight text-foreground">
             {user?.name?.split(' ')[0] || 'Pengguna'}
           </h1>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate('/akun')}
-          aria-label="Ke akun"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-[17px] font-semibold text-primary cursor-pointer active:scale-95"
-        >
-          {(user?.name || user?.email || 'S')[0].toUpperCase()}
-        </button>
-      </motion.div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDark(toggleTheme() === 'dark')}
+            aria-label={dark ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
+            className="relative flex h-11 w-11 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-secondary text-muted-foreground transition-colors active:scale-95"
+          >
+            <Sun className={`absolute h-5 w-5 transition-all duration-300 ${dark ? 'rotate-90 scale-0 opacity-0' : 'rotate-0 scale-100 opacity-100'}`} />
+            <Moon className={`absolute h-5 w-5 transition-all duration-300 ${dark ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/akun')}
+            aria-label="Ke akun"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-[17px] font-semibold text-primary cursor-pointer active:scale-95"
+          >
+            {(user?.name || user?.email || 'S')[0].toUpperCase()}
+          </button>
+        </div>
+      </div>
 
-      {/* Ringkasan bulan ini — grouped card putih */}
-      <motion.div variants={fadeUp}>
+      {/* Ringkasan bulan ini — grouped card */}
+      <div>
         <Panel className="p-5">
           <p className="text-[13px] text-muted-foreground">Total bulan ini</p>
           {loading ? (
@@ -111,25 +124,23 @@ export default function BerandaPage() {
             </motion.button>
           </div>
         </Panel>
-      </motion.div>
+      </div>
 
       {reviewCount > 0 && (
-        <motion.a
-          variants={fadeUp}
+        <a
           href="/transaksi?tab=review"
-          whileTap={{ scale: 0.99 }}
-          className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 text-[15px] text-foreground"
+          className="flex items-center gap-3 rounded-xl bg-card px-4 py-3 text-[15px] text-foreground active:bg-secondary"
         >
           <span className="tnum flex h-6 min-w-6 items-center justify-center rounded-full bg-destructive px-1.5 font-mono text-xs font-semibold text-white">
             {reviewCount}
           </span>
           <span className="flex-1">transaksi perlu ditinjau</span>
           <ArrowRight className="h-4 w-4 text-muted-foreground" />
-        </motion.a>
+        </a>
       )}
 
       {/* Tren harian */}
-      <motion.div variants={fadeUp}>
+      <div>
         <SectionTitle>Tren harian</SectionTitle>
         <Panel className="p-3">
           {loading ? (
@@ -148,10 +159,10 @@ export default function BerandaPage() {
             </ChartContainer>
           )}
         </Panel>
-      </motion.div>
+      </div>
 
       {/* Per kategori */}
-      <motion.div variants={fadeUp}>
+      <div>
         <SectionTitle>Per kategori</SectionTitle>
         {loading ? (
           <Skeleton className="h-28 w-full rounded-xl bg-secondary" />
@@ -189,31 +200,28 @@ export default function BerandaPage() {
             })}
           </Panel>
         )}
-      </motion.div>
+      </div>
 
       {/* Top merchant */}
       {top.length > 0 && (
-        <motion.div variants={fadeUp}>
+        <div>
           <SectionTitle>Merchant teratas</SectionTitle>
           <Panel className="divide-y divide-border/60">
             {top.map((m, i) => (
-              <motion.div
+              <div
                 key={m.name}
                 className="flex items-center gap-3 px-4 py-3"
-                initial={{ opacity: 0, x: 12 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.1 + i * 0.05 }}
               >
                 <span className="tnum flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-[13px] font-medium text-muted-foreground">
                   {i + 1}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-[17px] text-foreground">{m.name}</span>
                 <span className="tnum shrink-0 text-[15px] font-semibold text-foreground">{formatCurrency(m.total)}</span>
-              </motion.div>
+              </div>
             ))}
           </Panel>
-        </motion.div>
+        </div>
       )}
-    </motion.div>
+    </div>
   );
 }

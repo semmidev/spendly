@@ -7,14 +7,14 @@ import { Panel, SectionTitle, CategoryBadge } from '@/features/spendly/component
 import { getSyncDetail } from '@/features/spendly/api';
 
 const EMAIL_STATUS_STYLE = {
-  parsed: 'bg-green-500/15 text-green-600 dark:text-green-400',
-  needs_review: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
-  ignored: 'bg-secondary text-muted-foreground',
-  gated_out: 'bg-secondary text-muted-foreground',
-  dedup: 'bg-secondary text-muted-foreground',
-  fetched: 'bg-primary/15 text-primary',
-  extracting: 'bg-primary/15 text-primary',
-  failed: 'bg-red-500/15 text-destructive',
+  parsed: 'text-green-600 dark:text-green-400',
+  needs_review: 'text-orange-600 dark:text-orange-400',
+  ignored: 'text-muted-foreground',
+  gated_out: 'text-muted-foreground',
+  dedup: 'text-muted-foreground',
+  fetched: 'text-primary',
+  extracting: 'text-primary',
+  failed: 'text-destructive',
 };
 
 const EMAIL_STATUS_LABEL = {
@@ -138,7 +138,7 @@ export default function SyncDetailPage() {
                     </div>
                     <span className="mt-0.5 flex shrink-0 items-center gap-1.5">
                       {e.transaction?.category && <CategoryBadge name={e.transaction.category} size="sm" />}
-                      <span className={`rounded-full px-2 py-0.5 text-[13px] font-medium ${EMAIL_STATUS_STYLE[e.status] || EMAIL_STATUS_STYLE.fetched}`}>
+                      <span className={`text-[13px] ${EMAIL_STATUS_STYLE[e.status] || EMAIL_STATUS_STYLE.fetched}`}>
                         {EMAIL_STATUS_LABEL[e.status] || e.status}
                       </span>
                     </span>

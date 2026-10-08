@@ -1,20 +1,20 @@
 import { catMeta } from '@/features/spendly/categories';
 import { cn } from '@/lib/utils';
 
-// Kartu grouped ala iOS: putih di atas abu grouped, sudut 12px, tanpa shadow keras.
+// Kartu grouped ala iOS: tanpa border luar, hanya separator antar-row.
 export function Panel({ className, children, ...props }) {
   return (
-    <div className={cn('overflow-hidden rounded-xl border border-border/60 bg-card', className)} {...props}>
+    <div className={cn('overflow-hidden rounded-xl bg-card', className)} {...props}>
       {children}
     </div>
   );
 }
 
-// Header section ala iOS: footnote abu rata kiri.
+// Header section ala iOS Health: judul 20px semibold.
 export function SectionTitle({ children, action }) {
   return (
     <div className="mb-1.5 flex items-end justify-between px-4">
-      <h2 className="text-[13px] font-normal text-muted-foreground">{children}</h2>
+      <h2 className="text-[20px] font-bold tracking-tight text-foreground">{children}</h2>
       {action}
     </div>
   );
@@ -126,7 +126,7 @@ export function Switch({ checked, onChange, label }) {
       onClick={() => onChange(!checked)}
       className={cn(
         'relative h-[31px] w-[51px] shrink-0 cursor-pointer rounded-full transition-colors',
-        checked ? 'bg-green-500' : 'bg-black/15 dark:bg-white/20',
+        checked ? 'bg-[#34c759]' : 'bg-black/15 dark:bg-white/20',
       )}
     >
       <span

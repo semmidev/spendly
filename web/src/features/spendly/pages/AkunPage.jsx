@@ -70,12 +70,12 @@ const AKUN_TABS = [
 ];
 
 const JOB_STATUS_STYLE = {
-  done: 'bg-green-500/15 text-green-600 dark:text-green-400',
-  error: 'bg-red-500/15 text-destructive',
-  running: 'bg-primary/15 text-primary',
-  paused: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
-  canceling: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
-  canceled: 'bg-secondary text-muted-foreground',
+  done: 'text-green-600 dark:text-green-400',
+  error: 'text-destructive',
+  running: 'text-primary',
+  paused: 'text-orange-600 dark:text-orange-400',
+  canceling: 'text-orange-600 dark:text-orange-400',
+  canceled: 'text-muted-foreground',
 };
 
 const JOB_STATUS_LABEL = {
@@ -407,8 +407,8 @@ export default function AkunPage() {
                   <div className="flex items-center gap-3">
                     <Mail className="h-5 w-5 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1 truncate text-[17px] text-foreground">{c.google_email || 'Gmail terhubung'}</span>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[13px] font-medium ${
-                      c.status === 'active' ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-orange-500/15 text-orange-600 dark:text-orange-400'
+                    <span className={`shrink-0 text-[13px] ${
+                      c.status === 'active' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'
                     }`}>
                       {c.status}
                     </span>
@@ -777,7 +777,7 @@ export default function AkunPage() {
                 onClick={() => navigate(`/akun/sync/${h.id}`)}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-secondary cursor-pointer"
               >
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[13px] font-medium ${JOB_STATUS_STYLE[h.status] || JOB_STATUS_STYLE.canceled}`}>
+                <span className={`shrink-0 text-[13px] ${JOB_STATUS_STYLE[h.status] || JOB_STATUS_STYLE.canceled}`}>
                   {JOB_STATUS_LABEL[h.status] || h.status}
                 </span>
                 <span className="min-w-0 flex-1">

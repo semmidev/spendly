@@ -94,7 +94,7 @@ function FilterDisclosure({ children, range, group, source, cat: category, min, 
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-xl border border-border/60 bg-card px-4 py-3 text-left active:bg-secondary"
+        className="flex w-full items-center gap-2 rounded-xl bg-card px-4 py-3 text-left active:bg-secondary"
       >
         <SlidersHorizontal className="h-4 w-4 text-primary" />
         <span className="flex-1 text-[17px] text-foreground">Filter</span>

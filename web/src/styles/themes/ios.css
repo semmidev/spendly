@@ -144,12 +144,3 @@
   --lilac-stroke: #38383a;
 }
 
-/* Hero lama yang hijau pekat: paksa jadi kartu system agar tak ada sisa brand. */
-[data-theme='ios'] .panel-hero {
-  background-color: var(--card);
-  border-color: var(--separator);
-  color: var(--foreground);
-}
-[data-theme='ios'] .panel-hero .text-white { color: var(--foreground); }
-[data-theme='ios'] .panel-hero .text-white\/70 { color: var(--secondary-label); }
-[data-theme='ios'] .panel-hero .bg-white { background-color: var(--primary); color: #fff; }

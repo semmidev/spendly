@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { MotionConfig } from 'motion/react';
 import { Toaster } from 'sonner';
 import { useAuthStore } from '@/features/auth/store';
-import TopLoadingBar from '@/components/TopLoadingBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import MobileLayout from '@/components/MobileLayout';
 
@@ -69,9 +68,23 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <Toaster position="bottom-center" richColors closeButton />
+      <Toaster
+        position="bottom-center"
+        closeButton={false}
+        toastOptions={{
+          style: {
+            background: 'rgb(20 20 22 / 0.85)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '10px',
+            fontSize: '13px',
+            padding: '10px 14px',
+          },
+        }}
+      />
       <Router>
-        <TopLoadingBar />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<Navigate to="/beranda" replace />} />
