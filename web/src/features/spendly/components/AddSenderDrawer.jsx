@@ -49,21 +49,21 @@ export default function AddSenderDrawer({ open, onOpenChange, onAdded }) {
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="mx-auto max-w-md">
-        <DrawerHeader>
-          <p className="eyebrow">Email yang dibaca</p>
-          <DrawerTitle className="font-heading text-lg font-medium text-forest-ink">Tambah pengirim</DrawerTitle>
-          <DrawerDescription>Tambahkan domain pengirim yang boleh dibaca Spendly.</DrawerDescription>
+      <DrawerContent className="mx-auto max-w-md rounded-t-[14px]">
+        <div className="mx-auto mt-2 h-1.5 w-9 shrink-0 rounded-full bg-black/15 dark:bg-white/25" aria-hidden="true" />
+        <DrawerHeader className="text-center">
+          <DrawerTitle className="text-[17px] font-semibold text-foreground">Tambah pengirim</DrawerTitle>
+          <DrawerDescription className="text-[13px]">Domain pengirim yang boleh dibaca Spendly.</DrawerDescription>
         </DrawerHeader>
 
-        <form onSubmit={submit} className="flex-1 space-y-4 overflow-y-auto px-4 pb-6 pt-4">
+        <form onSubmit={submit} className="flex-1 space-y-4 overflow-y-auto px-4 pb-6 pt-3">
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-lichen">Kategori</label>
+              <label className="mb-1 block px-4 text-[13px] text-muted-foreground">Kategori</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-forest-ink focus:outline-none focus:ring-1 focus:ring-forest-ink"
+                className="h-11 w-full rounded-[10px] bg-secondary px-3 text-[15px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 {SENDER_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
@@ -74,11 +74,11 @@ export default function AddSenderDrawer({ open, onOpenChange, onAdded }) {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-lichen">Domain pengirim</label>
+              <label className="mb-1 block px-4 text-[13px] text-muted-foreground">Domain pengirim</label>
               <Input
                 value={domain}
                 onValueChange={setDomain}
-                placeholder="domain pengirim (mis. bca.co.id)"
+                placeholder="mis. bca.co.id"
                 aria-label="Domain pengirim"
                 autoFocus
                 className="h-11 font-mono"
@@ -86,7 +86,7 @@ export default function AddSenderDrawer({ open, onOpenChange, onAdded }) {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-lichen">Label (opsional)</label>
+              <label className="mb-1 block px-4 text-[13px] text-muted-foreground">Label (opsional)</label>
               <Input
                 value={label}
                 onValueChange={setLabel}
@@ -100,7 +100,7 @@ export default function AddSenderDrawer({ open, onOpenChange, onAdded }) {
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex h-[52px] w-full items-center justify-center rounded-full bg-forest-ink text-[15px] font-medium text-white transition-colors hover:bg-forest-ink/90 disabled:opacity-60 cursor-pointer"
+            className="inline-flex h-[50px] w-full items-center justify-center rounded-xl bg-primary text-[17px] font-semibold text-white disabled:opacity-50 cursor-pointer active:scale-[0.99]"
           >
             {saving ? 'Menyimpan…' : 'Tambah pengirim'}
           </button>

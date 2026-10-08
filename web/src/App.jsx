@@ -69,7 +69,7 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <Toaster position="top-center" richColors closeButton />
+      <Toaster position="bottom-center" richColors closeButton />
       <Router>
         <TopLoadingBar />
         <Suspense fallback={<RouteFallback />}>

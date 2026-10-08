@@ -10,9 +10,9 @@
 @import './theme.css';
 
 @theme inline {
-  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-heading: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter Variable', system-ui, sans-serif;
+  --font-heading: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter Variable', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
@@ -73,35 +73,39 @@
   --color-sage: var(--sage-glow);
   --color-petal: var(--petal);
 
-  /* Alias nama lama → nilai Lattice (agar komponen lama tetap konsisten) */
-  --color-ink: var(--forest-ink);
-  --color-graphite: var(--lichen-gray);
-  --color-steel: var(--stone);
-  --color-rule: #e4e1d3;
-  --color-edge: #e4e1d3;
-  --color-ice: var(--mint-surface);
-  --color-forest: var(--deep-forest);
-  --color-network: var(--deep-forest);
-  --color-mint: var(--mint-surface);
-  --color-brown: var(--saffron);
-  --color-paper: var(--paper-white);
+  /* Alias nama lama → sistem iOS (agar komponen lama tetap konsisten) */
+  --color-ink: var(--foreground);
+  --color-graphite: var(--muted-foreground);
+  --color-steel: var(--muted-foreground);
+  --color-rule: var(--separator);
+  --color-edge: var(--separator);
+  --color-ice: var(--secondary);
+  --color-forest: var(--primary);
+  --color-network: var(--primary);
+  --color-mint: var(--secondary);
+  --color-brown: var(--system-orange);
+  --color-paper: var(--card);
 
-  --radius-sm: 7px;
-  --radius-md: 12px;
-  --radius-lg: 14px;
-  --radius-xl: 22px;
-  --radius-2xl: 29px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
 
-  /* Bayangan lembut bertinta forest (Lattice) */
-  --shadow-md: color(srgb 0 0.121569 0.121569 / 0.04) 0px 12px 12px -6px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 6px 6px -3px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 3px 3px -1.5px, color(srgb 0 0.121569 0.121569 / 0.08) 0px 1px 1px -0.5px, color(srgb 0 0.121569 0.121569 / 0.04) 0px 0px 0px 1px;
+  /* Bayangan iOS: nyaris tanpa shadow, bertumpu pada separator */
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.04);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
   body {
     @apply bg-background text-foreground;
+    touch-action: manipulation;
   }
 
   /* Global scrollbar styling to match ScrollArea */
@@ -131,12 +135,12 @@
   }
 }
 
-/* ── Lattice: kanvas parchment + tipografi tunggal ─────────────────────── */
+/* ── iOS: grouped background + tipografi SF ─────────────────────────── */
 :root,
 [data-theme] {
-  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-heading: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter Variable', system-ui, sans-serif;
+  --font-heading: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter Variable', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
 body {
@@ -153,8 +157,8 @@ h2,
 h3,
 .font-heading {
   font-family: var(--font-heading);
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 /* Angka uang: tabular agar sejajar */
@@ -163,12 +167,12 @@ h3,
   font-feature-settings: 'tnum' 1;
 }
 
-/* Label kategori ala Lattice: uppercase, tracking lebar */
+/* Label section ala iOS: footnote abu, bukan eyebrow hijau */
 .eyebrow {
   font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--forest-ink);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--muted-foreground);
 }

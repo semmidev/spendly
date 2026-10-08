@@ -1,0 +1,155 @@
+/* iOS 18 clean classic — system grouped, SF stack, biru #007AFF. */
+[data-theme='ios'] {
+  --system-blue: #007aff;
+  --system-green: #34c759;
+  --system-red: #ff3b30;
+  --system-orange: #ff9500;
+
+  --background: #f2f2f7;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+
+  --primary: var(--system-blue);
+  --primary-foreground: #ffffff;
+  --secondary: #e9e9ee;
+  --secondary-foreground: #000000;
+  --muted: #e9e9ee;
+  --muted-foreground: #8e8e93;
+  --accent: var(--system-blue);
+  --accent-foreground: #ffffff;
+  --destructive: var(--system-red);
+  --destructive-foreground: #ffffff;
+
+  --border: #c6c6c8;
+  --input: #c6c6c8;
+  --ring: var(--system-blue);
+
+  --separator: rgb(60 60 67 / 0.12);
+  --secondary-label: rgb(60 60 67 / 0.6);
+
+  --chart-1: var(--system-blue);
+  --chart-2: var(--system-green);
+  --chart-3: var(--system-orange);
+  --chart-4: var(--system-red);
+  --chart-5: #af52de;
+  --chart-6: #5ac8fa;
+
+  --sidebar: #f2f2f7;
+  --sidebar-foreground: #000000;
+  --sidebar-primary: var(--system-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e9e9ee;
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: #c6c6c8;
+  --sidebar-ring: var(--system-blue);
+
+  /* ponytail: sudut iOS 10-12px; map radius lama ke sini */
+  --radius: 12px;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter Variable', system-ui, sans-serif;
+  --font-heading: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter Variable', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.04);
+
+  /* Alias Lattice lama → sistem iOS (komponen lama tetap jalan) */
+  --parchment: #f2f2f7;
+  --paper-white: #ffffff;
+  --forest-ink: #000000;
+  --lichen-gray: #8e8e93;
+  --stone: #8e8e93;
+  --slate: #3a3a3c;
+  --mist: #8e8e93;
+  --meadow: #e9e9ee;
+  --deep-forest: var(--system-blue);
+  --deep-teal: var(--system-blue);
+  --olive: var(--system-orange);
+  --plum: var(--system-red);
+  --saffron: var(--system-orange);
+  --iris: var(--system-blue);
+  --mint-surface: #e9e9ee;
+  --lime-surface: #e9e9ee;
+  --lavender-surface: #e9e9ee;
+  --blush-surface: #e9e9ee;
+  --buttercream: #fff6d6;
+  --sage-glow: #e9e9ee;
+  --petal: #ffe9e9;
+  --lilac-stroke: #c6c6c8;
+}
+
+[data-theme='ios'].dark {
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #1c1c1e;
+  --card-foreground: #ffffff;
+  --popover: #1c1c1e;
+  --popover-foreground: #ffffff;
+
+  --primary: #0a84ff;
+  --primary-foreground: #ffffff;
+  --secondary: #2c2c2e;
+  --secondary-foreground: #ffffff;
+  --muted: #2c2c2e;
+  --muted-foreground: #98989f;
+  --accent: #0a84ff;
+  --accent-foreground: #ffffff;
+  --destructive: #ff453a;
+  --destructive-foreground: #ffffff;
+
+  --border: #38383a;
+  --input: #38383a;
+  --ring: #0a84ff;
+
+  --separator: rgb(84 84 88 / 0.6);
+  --secondary-label: rgb(235 235 245 / 0.6);
+
+  --chart-1: #0a84ff;
+  --chart-2: #30d158;
+  --chart-3: #ff9f0a;
+  --chart-4: #ff453a;
+  --chart-5: #bf5af2;
+  --chart-6: #64d2ff;
+
+  --sidebar: #000000;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #0a84ff;
+  --sidebar-accent: #2c2c2e;
+  --sidebar-border: #38383a;
+
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.4);
+
+  --parchment: #000000;
+  --paper-white: #1c1c1e;
+  --forest-ink: #ffffff;
+  --lichen-gray: #98989f;
+  --stone: #98989f;
+  --slate: #e5e5ea;
+  --mist: #98989f;
+  --meadow: #2c2c2e;
+  --deep-forest: #0a84ff;
+  --deep-teal: #0a84ff;
+  --olive: #ff9f0a;
+  --plum: #ff6961;
+  --saffron: #ff9f0a;
+  --iris: #0a84ff;
+  --mint-surface: #2c2c2e;
+  --lime-surface: #2c2c2e;
+  --lavender-surface: #2c2c2e;
+  --blush-surface: #2c2c2e;
+  --buttercream: #3a2f10;
+  --sage-glow: #2c2c2e;
+  --petal: #3a2424;
+  --lilac-stroke: #38383a;
+}
+
+/* Hero lama yang hijau pekat: paksa jadi kartu system agar tak ada sisa brand. */
+[data-theme='ios'] .panel-hero {
+  background-color: var(--card);
+  border-color: var(--separator);
+  color: var(--foreground);
+}
+[data-theme='ios'] .panel-hero .text-white { color: var(--foreground); }
+[data-theme='ios'] .panel-hero .text-white\/70 { color: var(--secondary-label); }
+[data-theme='ios'] .panel-hero .bg-white { background-color: var(--primary); color: #fff; }

@@ -1,12 +1,11 @@
 import { motion } from 'motion/react';
-import { Wallet } from 'lucide-react';
+import { Wallet, Mail, ShieldCheck, PencilLine } from 'lucide-react';
 import { fadeUp, stagger } from '@/components/animate';
 
-// Kartu spesimen pastel ala Lattice — tiap modul punya warna sendiri.
 const POINTS = [
-  { n: '01', title: 'Otomatis dari Gmail', desc: 'Transaksi dari email bank, e-wallet, dan marketplace tercatat sendiri.', tint: 'bg-mint' },
-  { n: '02', title: 'Kamu pegang kendali', desc: 'Hanya pengirim yang kamu izinkan yang dibaca. Email tidak pernah diubah.', tint: 'bg-lime' },
-  { n: '03', title: 'Manual tetap bisa', desc: 'Belum siap Gmail? Catat pengeluaran kapan saja.', tint: 'bg-lavender' },
+  { title: 'Otomatis dari Gmail', desc: 'Struk bank, e-wallet, dan marketplace tercatat sendiri.', Icon: Mail, tint: 'bg-blue-500/10 text-blue-500' },
+  { title: 'Kamu pegang kendali', desc: 'Hanya pengirim yang kamu izinkan yang dibaca.', Icon: ShieldCheck, tint: 'bg-green-500/10 text-green-600 dark:text-green-400' },
+  { title: 'Manual tetap bisa', desc: 'Catat pengeluaran kapan saja lewat tombol +.', Icon: PencilLine, tint: 'bg-orange-500/10 text-orange-500' },
 ];
 
 function GoogleMark() {
@@ -20,94 +19,75 @@ function GoogleMark() {
   );
 }
 
-const floatA = { x: [0, 24, -12, 0], y: [0, -18, 12, 0] };
-const floatB = { x: [0, -20, 14, 0], y: [0, 16, -10, 0] };
-const floatT = (d) => ({ duration: d, repeat: Infinity, ease: 'easeInOut' });
-
 export default function Login() {
   return (
-    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-parchment px-5 py-10">
-      {/* Blob pastel melayang — hidup tapi kalem */}
-      <motion.span
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-24 -left-24 h-72 w-72 rounded-full bg-mint blur-3xl"
-        animate={floatA}
-        transition={floatT(14)}
-      />
-      <motion.span
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -bottom-24 h-80 w-80 rounded-full bg-lavender blur-3xl"
-        animate={floatB}
-        transition={floatT(17)}
-      />
-
+    <div
+      className="flex min-h-dvh justify-center bg-background"
+      style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       <motion.main
-        className="relative w-full max-w-md"
+        className="flex w-full max-w-md flex-1 flex-col px-5 pb-6 pt-14"
         variants={stagger(0.07)}
         initial="hidden"
         animate="show"
       >
-        {/* Brand */}
-        <motion.div variants={fadeUp} className="flex items-center gap-2.5">
-          <motion.span
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-forest-ink text-white"
-            initial={{ scale: 0.6, opacity: 0, rotate: -12 }}
-            animate={{ scale: 1, opacity: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+        {/* Ikon app ala iOS */}
+        <motion.div variants={fadeUp} className="flex flex-col items-center text-center">
+          <span
+            className="flex h-[76px] w-[76px] items-center justify-center rounded-[18px] text-white shadow-lg"
+            style={{ background: 'linear-gradient(180deg, #5ac8fa 0%, #007aff 100%)' }}
           >
-            <Wallet className="h-4 w-4" strokeWidth={2.2} />
-          </motion.span>
-          <span className="text-[15px] font-medium tracking-tight text-forest-ink">Spendly</span>
+            <Wallet className="h-9 w-9" strokeWidth={1.8} />
+          </span>
+          <p className="mt-3 text-[22px] font-bold tracking-tight text-foreground">Spendly</p>
         </motion.div>
 
-        {/* Hero */}
         <motion.h1
           variants={fadeUp}
-          className="mt-7 font-heading text-[40px] leading-[1.05] font-medium tracking-[-1.1px] text-forest-ink text-balance"
+          className="mt-7 text-center text-[28px] leading-[1.15] font-bold tracking-tight text-foreground text-balance"
         >
           Uangmu habis ke mana?
         </motion.h1>
-        <motion.p variants={fadeUp} className="mt-4 text-[17px] leading-snug text-lichen">
-          Spendly membaca notifikasi transaksi di Gmail, merapikannya jadi catatan, dan menjawab satu pertanyaan itu.
+        <motion.p variants={fadeUp} className="mt-2 text-center text-[17px] leading-snug text-muted-foreground">
+          Notifikasi transaksi di Gmail dibaca otomatis dan dirapikan jadi catatan pengeluaran.
         </motion.p>
 
-        {/* Kartu spesimen pastel */}
-        <div className="mt-8 space-y-2.5">
-          {POINTS.map((p) => (
-            <motion.div
-              key={p.n}
-              variants={fadeUp}
-              whileHover={{ y: -2 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-              className={`flex gap-3.5 rounded-lg ${p.tint} px-4 py-3.5`}
-            >
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-forest-ink text-[11px] font-medium text-white">
-                {p.n}
-              </span>
-              <div className="min-w-0">
-                <p className="text-[15px] font-medium text-forest-ink">{p.title}</p>
-                <p className="mt-0.5 text-[13px] leading-snug text-lichen">{p.desc}</p>
+        <motion.div variants={fadeUp} className="mt-7 overflow-hidden rounded-xl bg-card">
+          <div className="divide-y divide-border/60">
+            {POINTS.map((p) => (
+              <div key={p.title} className="flex items-center gap-3 px-4 py-3">
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] ${p.tint}`}>
+                  <p.Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[17px] leading-snug text-foreground">{p.title}</p>
+                  <p className="text-[13px] leading-snug text-muted-foreground">{p.desc}</p>
+                </div>
               </div>
-            </motion.div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </motion.div>
 
-        {/* CTA */}
-        <motion.a
-          variants={fadeUp}
-          href="/api/v1/auth/google/login"
-          whileHover={{ scale: 1.015 }}
-          whileTap={{ scale: 0.98 }}
-          className="mt-8 inline-flex h-12 w-full items-center justify-center gap-3 rounded-full bg-forest-ink text-[15px] font-medium text-white transition-colors hover:bg-forest-ink/90"
-        >
-          <GoogleMark />
-          Masuk dengan Google
-        </motion.a>
+        <motion.div variants={fadeUp} className="mt-7">
+          <motion.a
+            href="/api/v1/auth/google/login"
+            whileTap={{ scale: 0.98 }}
+            className="inline-flex h-[50px] w-full items-center justify-center gap-3 rounded-[14px] bg-primary text-[17px] font-semibold text-white"
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white">
+              <GoogleMark />
+            </span>
+            Masuk dengan Google
+          </motion.a>
+          <p className="mt-4 px-4 text-center text-[13px] leading-relaxed text-muted-foreground">
+            Dengan masuk, kamu menyetujui <span className="text-primary">Syarat Penggunaan</span> dan{' '}
+            <span className="text-primary">Kebijakan Privasi</span> Spendly.
+          </p>
+        </motion.div>
 
-        <motion.p variants={fadeUp} className="mt-4 text-center text-[13px] leading-relaxed text-stone">
-          {`Made with `}
-          <span className="text-red-500">❤️</span> by{" "}
-          <a href="https://github.com/semmidev" className="underline hover:text-forest-ink">
+        <motion.p variants={fadeUp} className="mt-auto pt-8 text-center text-[13px] text-muted-foreground">
+          Spendly 0.1.0 · Made with <span className="text-red-500">❤️</span> by{' '}
+          <a href="https://github.com/semmidev" className="text-primary">
             Sammi
           </a>
         </motion.p>

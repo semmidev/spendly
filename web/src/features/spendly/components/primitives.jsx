@@ -1,37 +1,68 @@
 import { catMeta } from '@/features/spendly/categories';
 import { cn } from '@/lib/utils';
 
-// Kartu dasar ala Lattice: putih di atas perkamen, sudut 14px, bayangan lembut.
+// Kartu grouped ala iOS: putih di atas abu grouped, sudut 12px, tanpa shadow keras.
 export function Panel({ className, children, ...props }) {
   return (
-    <div className={cn('rounded-lg border border-border/60 bg-card shadow-md', className)} {...props}>
+    <div className={cn('overflow-hidden rounded-xl border border-border/60 bg-card', className)} {...props}>
       {children}
     </div>
   );
 }
 
-// Label kategori: pill + heading + deskripsi (ritme section Lattice).
+// Header section ala iOS: footnote abu rata kiri.
 export function SectionTitle({ children, action }) {
   return (
-    <div className="mb-2 flex items-end justify-between px-0.5">
-      <h2 className="eyebrow">{children}</h2>
+    <div className="mb-1.5 flex items-end justify-between px-4">
+      <h2 className="text-[13px] font-normal text-muted-foreground">{children}</h2>
       {action}
     </div>
   );
 }
 
-// Badge kategori: lingkaran pastel + ikon tinta.
+// Badge kategori: squircle iOS 10px + ikon.
 export function CategoryBadge({ name, size = 'md' }) {
   const { soft, Icon } = catMeta(name);
-  const box = size === 'sm' ? 'h-9 w-9' : 'h-11 w-11';
+  const box = size === 'sm' ? 'h-9 w-9 rounded-[10px]' : 'h-11 w-11 rounded-xl';
   const icon = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5';
   return (
     <span
-      className={cn('flex shrink-0 items-center justify-center rounded-full border border-forest-ink/10', box)}
-      style={{ backgroundColor: soft, color: '#001f1f' }}
+      className={cn('flex shrink-0 items-center justify-center', box)}
+      style={{ backgroundColor: soft, color: 'var(--primary)' }}
     >
       <Icon className={icon} strokeWidth={2} />
     </span>
+  );
+}
+
+// Segmented control iOS: wadah abu, pilihan aktif putih bershadow.
+export function Segmented({ options, value, onChange, ariaLabel }) {
+  return (
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className="flex rounded-[10px] bg-secondary p-0.5"
+    >
+      {options.map((o) => {
+        const active = value === o.id;
+        return (
+          <button
+            key={o.id}
+            role="tab"
+            aria-selected={active}
+            type="button"
+            onClick={() => onChange(o.id)}
+            className={cn(
+              'flex h-8 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[13px] transition-all cursor-pointer',
+              active ? 'bg-card font-semibold text-foreground shadow-sm' : 'font-normal text-muted-foreground',
+            )}
+          >
+            {o.icon && <o.icon className="h-3.5 w-3.5" />}
+            {o.title}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -40,10 +71,10 @@ export function Chip({ active, className, children, ...props }) {
     <button
       type="button"
       className={cn(
-        'shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer',
+        'shrink-0 rounded-full px-3.5 py-1.5 text-[13px] transition-colors cursor-pointer',
         active
-          ? 'border-forest-ink bg-forest-ink text-white'
-          : 'border-border bg-card text-stone hover:text-forest-ink',
+          ? 'bg-primary font-semibold text-white'
+          : 'bg-secondary font-normal text-foreground',
         className,
       )}
       {...props}
@@ -55,15 +86,15 @@ export function Chip({ active, className, children, ...props }) {
 
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
-    <Panel className="flex flex-col items-center gap-2 border-edge bg-mint px-6 py-10 text-center">
+    <Panel className="flex flex-col items-center gap-1.5 px-6 py-10 text-center">
       {Icon && (
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-forest-ink text-white">
-          <Icon className="h-5 w-5" strokeWidth={2} />
+        <span className="mb-1 flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+          <Icon className="h-6 w-6" strokeWidth={1.6} />
         </span>
       )}
-      <p className="font-heading text-[15px] font-medium text-forest-ink">{title}</p>
-      {description && <p className="max-w-[17rem] text-xs leading-relaxed text-lichen">{description}</p>}
-      {action}
+      <p className="text-[17px] font-semibold text-foreground">{title}</p>
+      {description && <p className="max-w-[17rem] text-[13px] leading-relaxed text-muted-foreground">{description}</p>}
+      {action && <div className="mt-2">{action}</div>}
     </Panel>
   );
 }
@@ -74,12 +105,36 @@ export function DeltaPill({ value, suffix = '' }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[11px] font-medium',
-        up ? 'border-plum/30 bg-petal text-plum' : 'border-deep-forest/30 bg-sage text-deep-forest',
+        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[12px] font-medium',
+        up ? 'bg-red-500/10 text-destructive' : 'bg-green-500/10 text-green-600 dark:text-green-400',
       )}
     >
       {up ? '▲' : '▼'} {Math.abs(value).toLocaleString('id-ID')}
       {suffix}
     </span>
+  );
+}
+
+// Switch iOS.
+export function Switch({ checked, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative h-[31px] w-[51px] shrink-0 cursor-pointer rounded-full transition-colors',
+        checked ? 'bg-green-500' : 'bg-black/15 dark:bg-white/20',
+      )}
+    >
+      <span
+        className={cn(
+          'absolute top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow transition-all',
+          checked ? 'left-[22px]' : 'left-[2px]',
+        )}
+      />
+    </button>
   );
 }

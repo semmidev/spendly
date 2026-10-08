@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Search, Trash2, ReceiptText, Sparkles, Inbox, RotateCcw, ChevronDown, LayoutList, EyeOff } from 'lucide-react';
+import { Search, Trash2, ReceiptText, Sparkles, Inbox, RotateCcw, ChevronDown, ChevronRight, LayoutList, EyeOff, SlidersHorizontal } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
-import { Panel, SectionTitle, CategoryBadge, EmptyState } from '@/features/spendly/components/primitives';
+import { Panel, SectionTitle, CategoryBadge, EmptyState, Segmented } from '@/features/spendly/components/primitives';
 import ConfirmDialog from '@/features/spendly/components/ConfirmDialog';
 import TransactionDetailModal, { EmailDetailModal } from '@/features/spendly/components/TransactionDetailModal';
 import { uniqueCategories } from '@/features/spendly/categories';
@@ -64,24 +64,49 @@ function groupItems(items, group) {
   return [...map.values()];
 }
 
-// Dropdown filter ringkas (select native: aksesibel + picker bawaan di mobile).
+// Select ala iOS: field abu rounded-10.
 function FilterSelect({ label, className, children, ...props }) {
   return (
     <label className="min-w-0">
-      <span className="eyebrow mb-1 block">{label}</span>
+      <span className="mb-1 block text-[13px] text-muted-foreground">{label}</span>
       <div className="relative">
         <select
           {...props}
           className={cn(
-            'h-10 w-full min-w-0 cursor-pointer appearance-none truncate rounded-full border border-border bg-card pl-3 pr-7 text-xs font-medium text-forest-ink outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+            'h-11 w-full min-w-0 cursor-pointer appearance-none truncate rounded-[10px] bg-secondary pl-3 pr-8 text-[15px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
             className,
           )}
         >
           {children}
         </select>
-        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-lichen" />
+        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       </div>
     </label>
+  );
+}
+
+// Baris filter ala iOS: disclosure yang membuka form di grouped card.
+function FilterDisclosure({ children, range, group, source, cat: category, min, max, from: _from, to: _to }) {
+  const [open, setOpen] = useState(false);
+  const activeCount = [range !== 'all', category, source, min, max, group !== 'day'].filter(Boolean).length;
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 rounded-xl border border-border/60 bg-card px-4 py-3 text-left active:bg-secondary"
+      >
+        <SlidersHorizontal className="h-4 w-4 text-primary" />
+        <span className="flex-1 text-[17px] text-foreground">Filter</span>
+        {activeCount > 0 && (
+          <span className="tnum flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-white">
+            {activeCount}
+          </span>
+        )}
+        <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-90')} />
+      </button>
+      {open && <Panel className="mt-2 p-4">{children}</Panel>}
+    </div>
   );
 }
 
@@ -273,15 +298,16 @@ export default function TransaksiPage() {
       <>
         <CategoryBadge name={t.category} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-forest-ink">{t.merchant || t.category || 'Pengeluaran'}</p>
-          {t.note && <p className="truncate text-xs text-lichen">{t.note}</p>}
-          <p className="truncate font-mono text-[11px] text-lichen">
+          <p className="truncate text-[17px] text-foreground">{t.merchant || t.category || 'Pengeluaran'}</p>
+          {t.note && <p className="truncate text-[13px] text-muted-foreground">{t.note}</p>}
+          <p className="truncate text-[13px] text-muted-foreground">
             {formatDate(t.occurred_at)} · {t.category}
             {t.payment_source ? ` · ${t.payment_source}` : ''}
             {tab === 'review' && t.confidence != null ? ` · ${Math.round(t.confidence * 100)}%` : ''}
           </p>
         </div>
-        <p className="tnum shrink-0 font-mono text-sm font-medium text-forest-ink">{formatCurrency(t.amount)}</p>
+        <p className="tnum shrink-0 text-[15px] font-semibold text-foreground">{formatCurrency(t.amount)}</p>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       </>
     );
     return (
@@ -301,25 +327,25 @@ export default function TransaksiPage() {
         {tab === 'review' && (
           <div className="mt-2.5 space-y-2 pl-[52px]">
             {t.duplicate_of && (
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-saffron/40 bg-butter/40 px-3 py-1.5">
-                <span className="text-[11px] font-medium text-saffron">Kemungkinan duplikat</span>
+              <div className="flex items-center justify-between gap-2 rounded-[10px] bg-secondary px-3 py-2">
+                <span className="text-[13px] text-orange-600 dark:text-orange-400">Kemungkinan duplikat</span>
                 <button
                   type="button"
                   onClick={() => mergeTransaction(t.id, t.duplicate_of).then(() => { toast.success('Digabung'); load(q, cat, 1); }).catch(() => toast.error('Gagal menggabung'))}
-                  className="shrink-0 rounded-full border border-saffron px-3 py-1 text-[11px] font-medium text-saffron cursor-pointer"
+                  className="shrink-0 text-[15px] font-semibold text-primary cursor-pointer"
                 >
                   Gabung
                 </button>
               </div>
             )}
             <div className="flex gap-2">
-              <button type="button" onClick={() => onConfirm(t)} className="flex-1 rounded-full border border-forest-ink bg-forest-ink py-2 text-xs font-medium text-white cursor-pointer">
+              <button type="button" onClick={() => onConfirm(t)} className="h-[44px] flex-1 rounded-xl bg-primary text-[15px] font-semibold text-white cursor-pointer active:scale-[0.98]">
                 Benar
               </button>
               <button
                 type="button"
                 onClick={() => ignoreReview(t.id).then(() => { toast.success('Diabaikan'); load(q, cat, 1); })}
-                className="flex-1 rounded-full border border-border py-2 text-xs font-medium text-lichen cursor-pointer"
+                className="h-[44px] flex-1 rounded-xl bg-secondary text-[15px] font-semibold text-primary cursor-pointer active:scale-[0.98]"
               >
                 Bukan pengeluaran
               </button>
@@ -329,10 +355,10 @@ export default function TransaksiPage() {
 
         {tab === 'ignored' && (
           <div className="mt-2.5 flex gap-2 pl-[52px]">
-            <button type="button" onClick={() => onCorrect(t)} className="flex-1 rounded-full border border-forest-ink py-2 text-xs font-medium text-forest-ink cursor-pointer">
+            <button type="button" onClick={() => onCorrect(t)} className="h-[44px] flex-1 rounded-xl bg-primary text-[15px] font-semibold text-white cursor-pointer active:scale-[0.98]">
               Jadikan pengeluaran
             </button>
-            <button type="button" onClick={() => askDelete(t)} className="rounded-full border border-border px-3 py-2 text-xs text-lichen cursor-pointer">
+            <button type="button" onClick={() => askDelete(t)} className="h-[44px] rounded-xl bg-secondary px-4 text-[15px] text-destructive cursor-pointer active:scale-[0.98]">
               Hapus
             </button>
           </div>
@@ -340,8 +366,8 @@ export default function TransaksiPage() {
 
         {tab === 'all' && (
           <div className="mt-1 flex justify-end">
-            <button type="button" onClick={() => askDelete(t)} aria-label="Hapus" className="flex h-7 w-7 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer">
-              <Trash2 className="h-3.5 w-3.5" />
+            <button type="button" onClick={() => askDelete(t)} aria-label="Hapus" className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors active:bg-secondary active:text-destructive cursor-pointer">
+              <Trash2 className="h-4 w-4" />
             </button>
           </div>
         )}
@@ -351,9 +377,9 @@ export default function TransaksiPage() {
             <button
               type="button"
               onClick={() => restoreTransaction(t.id).then(() => { toast.success('Dipulihkan'); load(q, cat, 1); }).catch(() => toast.error('Gagal memulihkan'))}
-              className="inline-flex items-center gap-1.5 rounded-full border border-forest-ink bg-forest-ink px-4 py-2 text-xs font-medium text-white cursor-pointer"
+              className="inline-flex h-[44px] items-center gap-1.5 rounded-xl bg-primary px-4 text-[15px] font-semibold text-white cursor-pointer active:scale-[0.98]"
             >
-              <RotateCcw className="h-3.5 w-3.5" /> Pulihkan
+              <RotateCcw className="h-4 w-4" /> Pulihkan
             </button>
           </div>
         )}
@@ -363,81 +389,77 @@ export default function TransaksiPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="font-heading text-[22px] leading-tight font-medium tracking-tight text-forest-ink">Transaksi</h1>
+      <h1 className="pt-1 text-[34px] leading-tight font-bold tracking-tight text-foreground">Transaksi</h1>
 
-      {/* Tabs */}
-      <div className="flex border-b border-border">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2.5 text-xs font-medium transition-colors cursor-pointer ${
-              tab === t.id ? 'border-forest-ink text-forest-ink' : 'border-transparent text-lichen'
-            }`}
-          >
-            <t.icon className="h-3.5 w-3.5" />
-            {t.title}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        ariaLabel="Tab transaksi"
+        value={tab}
+        onChange={setTab}
+        options={TABS.map((t) => ({ id: t.id, title: t.title }))}
+      />
 
       {(tab === 'all' || tab === 'trash') && (
         <>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lichen" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Cari merchant, catatan, atau kategori…"
+              placeholder="Cari"
               value={q}
               onValueChange={setQ}
               onKeyDown={(e) => { if (e.key === 'Enter') load(q, cat, 1); }}
-              className="h-11 pl-10"
+              className="h-9 rounded-[10px] pl-9 text-[17px]"
               aria-label="Cari transaksi"
             />
           </div>
 
-          {/* Filter: rentang tanggal, kategori, sumber, pengelompokan */}
-          <div className="grid grid-cols-2 gap-2">
-            <FilterSelect label="Rentang" aria-label="Rentang tanggal" value={range} onChange={(e) => pickRange(e.target.value)}>
-              {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </FilterSelect>
-            <FilterSelect label="Kategori" aria-label="Filter kategori" value={cat} onChange={(e) => { setCat(e.target.value); load(q, e.target.value, 1); }}>
-              <option value="">Semua</option>
-              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
-            </FilterSelect>
-            <FilterSelect label="Sumber" aria-label="Sumber transaksi" value={source} onChange={(e) => { setSource(e.target.value); load(q, cat, 1, false, range, from, to, e.target.value, min, max); }}>
-              <option value="">Semua</option>
-              <option value="manual">Manual</option>
-              <option value="email">Email</option>
-            </FilterSelect>
-            <FilterSelect label="Kelompok" aria-label="Kelompok transaksi" value={group} onChange={(e) => setGroup(e.target.value)}>
-              {GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
-            </FilterSelect>
-          </div>
-          <div className="flex items-center gap-2">
-            <Input type="number" inputMode="numeric" placeholder="Nominal min" value={min} onValueChange={(v) => setMin(v.replace(/[^0-9]/g, ''))} aria-label="Nominal minimum" className="h-10 flex-1" />
-            <span className="text-xs text-lichen">s/d</span>
-            <Input type="number" inputMode="numeric" placeholder="Nominal maks" value={max} onValueChange={(v) => setMax(v.replace(/[^0-9]/g, ''))} aria-label="Nominal maksimum" className="h-10 flex-1" />
-            <button type="button" onClick={() => load(q, cat, 1, false, range, from, to, source, min, max)} className="h-10 shrink-0 rounded-full border border-forest-ink bg-forest-ink px-3 text-xs font-medium text-white cursor-pointer">
-              Terapkan
-            </button>
-          </div>
-          {range === 'custom' && (
-            <div className="flex items-center gap-2">
-              <Input type="date" value={from} onValueChange={setFrom} aria-label="Dari tanggal" className="h-10 flex-1" />
-              <span className="text-xs text-lichen">s/d</span>
-              <Input type="date" value={to} onValueChange={setTo} aria-label="Sampai tanggal" className="h-10 flex-1" />
-              <button type="button" onClick={() => load(q, cat, 1, false, 'custom', from, to)} className="h-10 shrink-0 rounded-full border border-forest-ink bg-forest-ink px-3 text-xs font-medium text-white cursor-pointer">
-                Terapkan
+          {/* Filter ala iOS: satu baris disclosure + form di grouped card */}
+          <FilterDisclosure
+            range={range} group={group} source={source} cat={cat} min={min} max={max}
+            from={from} to={to}
+            onPickRange={pickRange}
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <FilterSelect label="Rentang" aria-label="Rentang tanggal" value={range} onChange={(e) => pickRange(e.target.value)}>
+                {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+              </FilterSelect>
+              <FilterSelect label="Kategori" aria-label="Filter kategori" value={cat} onChange={(e) => { setCat(e.target.value); load(q, e.target.value, 1); }}>
+                <option value="">Semua</option>
+                {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+              </FilterSelect>
+              <FilterSelect label="Sumber" aria-label="Sumber transaksi" value={source} onChange={(e) => { setSource(e.target.value); load(q, cat, 1, false, range, from, to, e.target.value, min, max); }}>
+                <option value="">Semua</option>
+                <option value="manual">Manual</option>
+                <option value="email">Email</option>
+              </FilterSelect>
+              <FilterSelect label="Kelompok" aria-label="Kelompok transaksi" value={group} onChange={(e) => setGroup(e.target.value)}>
+                {GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+              </FilterSelect>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <Input type="number" inputMode="numeric" placeholder="Min" value={min} onValueChange={(v) => setMin(v.replace(/[^0-9]/g, ''))} aria-label="Nominal minimum" className="h-11 flex-1" />
+              <span className="text-[13px] text-muted-foreground">s/d</span>
+              <Input type="number" inputMode="numeric" placeholder="Maks" value={max} onValueChange={(v) => setMax(v.replace(/[^0-9]/g, ''))} aria-label="Nominal maksimum" className="h-11 flex-1" />
+              <button type="button" onClick={() => load(q, cat, 1, false, range, from, to, source, min, max)} className="h-11 shrink-0 rounded-[10px] bg-primary px-4 text-[15px] font-semibold text-white cursor-pointer active:scale-[0.98]">
+                OK
               </button>
             </div>
-          )}
+            {range === 'custom' && (
+              <div className="mt-3 flex items-center gap-2">
+                <Input type="date" value={from} onValueChange={setFrom} aria-label="Dari tanggal" className="h-11 flex-1" />
+                <span className="text-[13px] text-muted-foreground">s/d</span>
+                <Input type="date" value={to} onValueChange={setTo} aria-label="Sampai tanggal" className="h-11 flex-1" />
+                <button type="button" onClick={() => load(q, cat, 1, false, 'custom', from, to)} className="h-11 shrink-0 rounded-[10px] bg-primary px-4 text-[15px] font-semibold text-white cursor-pointer active:scale-[0.98]">
+                  OK
+                </button>
+              </div>
+            )}
+          </FilterDisclosure>
         </>
       )}
 
       {loading && items.length === 0 ? (
         <div className="space-y-2">
-          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[68px] w-full rounded-lg" />)}
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[72px] w-full rounded-xl bg-secondary" />)}
         </div>
       ) : items.length === 0 && ignoredEmails.length === 0 ? (
         <EmptyState
@@ -453,7 +475,7 @@ export default function TransaksiPage() {
                   : 'Transaksi yang dihapus akan muncul di sini dan bisa dipulihkan.'
           }
           action={tab === 'all' && (
-            <button type="button" onClick={openQuickAdd} className="mt-1 rounded-full border border-forest-ink bg-forest-ink px-4 py-2 text-xs font-medium text-white cursor-pointer">
+            <button type="button" onClick={openQuickAdd} className="mt-1 h-[44px] rounded-xl bg-primary px-5 text-[15px] font-semibold text-white cursor-pointer active:scale-[0.98]">
               Catat sekarang
             </button>
           )}
@@ -464,18 +486,18 @@ export default function TransaksiPage() {
             <div className="space-y-4">
               {grouped.map((g) => (
                 <div key={g.key}>
-                  <div className="mb-1.5 flex items-baseline justify-between px-0.5">
-                    <span className="eyebrow">{g.label}</span>
-                    <span className="tnum font-mono text-[11px] font-medium text-lichen">{formatCurrency(g.total)}</span>
+                  <div className="mb-1.5 flex items-baseline justify-between px-4">
+                    <span className="text-[13px] text-muted-foreground">{g.label}</span>
+                    <span className="tnum text-[13px] font-medium text-muted-foreground">{formatCurrency(g.total)}</span>
                   </div>
-                  <Panel className="divide-y divide-border">
+                  <Panel className="divide-y divide-border/60">
                     {g.items.map((t) => <TxRow key={t.id} t={t} />)}
                   </Panel>
                 </div>
               ))}
             </div>
           ) : (
-            items.length > 0 && <Panel className="divide-y divide-border">{items.map((t) => <TxRow key={t.id} t={t} />)}</Panel>
+            items.length > 0 && <Panel className="divide-y divide-border/60">{items.map((t) => <TxRow key={t.id} t={t} />)}</Panel>
           )}
 
           {(tab === 'all' || tab === 'trash') && items.length < total && (
@@ -483,7 +505,7 @@ export default function TransaksiPage() {
               type="button"
               onClick={() => load(q, cat, page + 1, true)}
               disabled={loading}
-              className="w-full rounded-full border border-border py-3 text-xs font-medium text-lichen cursor-pointer disabled:cursor-default disabled:opacity-50"
+              className="h-[44px] w-full rounded-xl bg-secondary text-[15px] font-semibold text-primary cursor-pointer disabled:opacity-50 active:scale-[0.99]"
             >
               Muat lagi ({items.length}/{total})
             </button>
@@ -494,7 +516,7 @@ export default function TransaksiPage() {
               type="button"
               onClick={() => load(q, cat, reviewPage + 1, true)}
               disabled={loading}
-              className="w-full rounded-full border border-border py-3 text-xs font-medium text-lichen cursor-pointer disabled:cursor-default disabled:opacity-50"
+              className="h-[44px] w-full rounded-xl bg-secondary text-[15px] font-semibold text-primary cursor-pointer disabled:opacity-50 active:scale-[0.99]"
             >
               Muat lagi ({items.length}/{reviewTotal})
             </button>
@@ -503,7 +525,7 @@ export default function TransaksiPage() {
           {tab === 'ignored' && ignoredEmails.length > 0 && (
             <div className="pt-1">
               <SectionTitle>Email diabaikan / gagal</SectionTitle>
-              <Panel className="divide-y divide-border">
+              <Panel className="divide-y divide-border/60">
                 {ignoredEmails.map((e) => (
                   <div key={e.id} className="flex items-center gap-3 px-4 py-3">
                     <button
@@ -511,8 +533,8 @@ export default function TransaksiPage() {
                       onClick={() => setSelectedEmail(e)}
                       className="min-w-0 flex-1 cursor-pointer text-left"
                     >
-                      <span className="block truncate text-xs font-medium text-forest-ink">{e.subject || '(tanpa subjek)'}</span>
-                      <span className={cn('block truncate font-mono text-[11px]', e.error ? 'text-destructive' : 'text-lichen')}>
+                      <span className="block truncate text-[15px] text-foreground">{e.subject || '(tanpa subjek)'}</span>
+                      <span className={cn('block truncate text-[13px]', e.error ? 'text-destructive' : 'text-muted-foreground')}>
                         {e.sender_domain ? `${e.sender_domain} · ` : ''}
                         {e.error ? `gagal: ${e.error}` : (e.reason || 'bukan pengeluaran')}
                       </span>
@@ -520,9 +542,9 @@ export default function TransaksiPage() {
                     <button
                       type="button"
                       onClick={() => reprocessEmail(e.id).then(() => { toast.success('Dijadwalkan ulang'); load(q, cat, 1); })}
-                      className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-deep-forest cursor-pointer"
+                      className="inline-flex shrink-0 items-center gap-1 text-[15px] font-medium text-primary cursor-pointer"
                     >
-                      <RotateCcw className="h-3.5 w-3.5" /> Proses ulang
+                      <RotateCcw className="h-4 w-4" /> Ulangi
                     </button>
                   </div>
                 ))}
@@ -535,7 +557,7 @@ export default function TransaksiPage() {
               type="button"
               onClick={() => load(q, cat, ignoredPage + 1, true)}
               disabled={loading}
-              className="w-full rounded-full border border-border py-3 text-xs font-medium text-lichen cursor-pointer disabled:cursor-default disabled:opacity-50"
+              className="h-[44px] w-full rounded-xl bg-secondary text-[15px] font-semibold text-primary cursor-pointer disabled:opacity-50 active:scale-[0.99]"
             >
               Muat lagi
             </button>

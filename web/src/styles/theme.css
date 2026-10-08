@@ -1,5 +1,5 @@
-/* Tema default Spendly — Lattice (botanical field journal) */
-@import './themes/lattice.css';
+/* Tema default Spendly — iOS 18 clean classic */
+@import './themes/ios.css';
 
 body {
   @apply overscroll-none;

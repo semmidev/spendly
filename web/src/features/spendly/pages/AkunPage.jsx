@@ -2,15 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  Mail, Trash2, LogOut, RefreshCw, Plus, ShieldCheck, Check,
-  Pause, Play, Square, Moon, Sun, User, SlidersHorizontal, History, ChevronRight, Download, Search,
+  Mail, Trash2, LogOut, RefreshCw, Plus, Pause, Play, Square, Moon, Sun, User, SlidersHorizontal, History, ChevronRight, Download, Search,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { getTheme, toggleTheme } from '@/lib/theme';
 import { useInstallPrompt } from '@/lib/useInstallPrompt';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Panel, SectionTitle, Chip } from '@/features/spendly/components/primitives';
+import { Panel, SectionTitle, Segmented, Switch } from '@/features/spendly/components/primitives';
 import AddSenderDrawer from '@/features/spendly/components/AddSenderDrawer';
 import ConfirmDialog from '@/features/spendly/components/ConfirmDialog';
 import { useAuthStore } from '@/features/auth/store';
@@ -71,12 +70,12 @@ const AKUN_TABS = [
 ];
 
 const JOB_STATUS_STYLE = {
-  done: 'border-deep-forest/30 bg-sage text-deep-forest',
-  error: 'border-destructive/40 bg-destructive/10 text-destructive',
-  running: 'border-network/40 bg-mint text-deep-forest',
-  paused: 'border-saffron/40 bg-butter text-saffron',
-  canceling: 'border-saffron/40 bg-butter text-saffron',
-  canceled: 'border-border bg-mint text-lichen',
+  done: 'bg-green-500/15 text-green-600 dark:text-green-400',
+  error: 'bg-red-500/15 text-destructive',
+  running: 'bg-primary/15 text-primary',
+  paused: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+  canceling: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+  canceled: 'bg-secondary text-muted-foreground',
 };
 
 const JOB_STATUS_LABEL = {
@@ -361,34 +360,24 @@ export default function AkunPage() {
   const isIndeterminate = pct === -1 && jobActive;
 
   return (
-    <div className="space-y-6">
-      <h1 className="font-heading text-[22px] leading-tight font-medium tracking-tight text-forest-ink">Akun</h1>
+    <div className="space-y-4">
+      <h1 className="pt-1 text-[34px] leading-tight font-bold tracking-tight text-foreground">Akun</h1>
 
-      {/* Tabs */}
-      <div className="flex border-b border-border">
-        {AKUN_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setAkunTab(t.id)}
-            className={`-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2.5 text-xs font-medium transition-colors cursor-pointer ${
-              akunTab === t.id ? 'border-forest-ink text-forest-ink' : 'border-transparent text-lichen'
-            }`}
-          >
-            <t.icon className="h-3.5 w-3.5" />
-            {t.title}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        ariaLabel="Tab akun"
+        value={akunTab}
+        onChange={setAkunTab}
+        options={AKUN_TABS.map((t) => ({ id: t.id, title: t.title }))}
+      />
 
       {/* Profil */}
-      <Panel className={`items-center gap-3.5 p-4 ${akunTab === 'akun' ? 'flex' : 'hidden'}`}>
-        <span className="flex h-12 w-12 items-center justify-center rounded-full border border-forest-ink bg-forest-ink font-heading text-lg font-medium text-white">
+      <Panel className={`gap-3.5 p-4 ${akunTab === 'akun' ? 'flex items-center' : 'hidden'}`}>
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-xl font-semibold text-primary">
           {initial}
         </span>
         <div className="min-w-0">
-          <p className="truncate font-heading text-sm font-medium text-forest-ink">{user?.name || 'Pengguna Spendly'}</p>
-          <p className="truncate font-mono text-[11px] text-lichen">{user?.email || ''}</p>
+          <p className="truncate text-[17px] font-semibold text-foreground">{user?.name || 'Pengguna Spendly'}</p>
+          <p className="truncate text-[13px] text-muted-foreground">{user?.email || ''}</p>
         </div>
       </Panel>
 
@@ -397,54 +386,54 @@ export default function AkunPage() {
         <SectionTitle>Gmail</SectionTitle>
         <Panel className="p-4">
           {loading ? (
-            <Skeleton className="h-10 w-full rounded-sm" />
+            <Skeleton className="h-12 w-full rounded-xl bg-secondary" />
           ) : conns.length === 0 ? (
             <div className="space-y-3">
-              <p className="text-xs leading-relaxed text-lichen">
+              <p className="text-[15px] leading-relaxed text-muted-foreground">
                 Hubungkan Gmail agar struk dan notifikasi transaksi terbaca otomatis. Hanya pengirim yang kamu izinkan yang dibaca.
               </p>
               <button
                 type="button"
                 onClick={connectGmail}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-forest-ink bg-forest-ink text-sm font-medium text-white cursor-pointer"
+                className="inline-flex h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-primary text-[17px] font-semibold text-white cursor-pointer active:scale-[0.99]"
               >
-                <Mail className="h-4 w-4" /> Hubungkan Gmail
+                <Mail className="h-5 w-5" /> Hubungkan Gmail
               </button>
             </div>
           ) : (
             <div className="space-y-3">
               {conns.map((c) => (
-                <div key={c.id} className="rounded-md border border-border bg-mint/50 px-3.5 py-3">
+                <div key={c.id} className="rounded-xl bg-secondary px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <Mail className="h-4 w-4 shrink-0 text-lichen" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-forest-ink">{c.google_email || 'Gmail terhubung'}</span>
-                    <span className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] font-medium ${
-                      c.status === 'active' ? 'border-deep-forest/30 bg-sage text-deep-forest' : 'border-saffron/40 bg-butter text-saffron'
+                    <Mail className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-[17px] text-foreground">{c.google_email || 'Gmail terhubung'}</span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[13px] font-medium ${
+                      c.status === 'active' ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-orange-500/15 text-orange-600 dark:text-orange-400'
                     }`}>
                       {c.status}
                     </span>
-                    <button type="button" onClick={() => onDisconnect(c.id)} disabled={busy === 'dc'} className="shrink-0 text-xs font-medium text-destructive cursor-pointer">
+                    <button type="button" onClick={() => onDisconnect(c.id)} disabled={busy === 'dc'} className="shrink-0 text-[15px] text-destructive cursor-pointer">
                       Putus
                     </button>
                   </div>
                   {c.status === 'needs_reauth' && (
                     <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
-                      <p className="text-[11px] leading-relaxed text-saffron">
+                      <p className="text-[13px] leading-relaxed text-orange-600 dark:text-orange-400">
                         Akses Gmail terputus. Hubungkan ulang agar sinkronisasi bisa jalan lagi.
                       </p>
                       <button
                         type="button"
                         onClick={connectGmail}
-                        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-forest-ink bg-forest-ink text-xs font-medium text-white cursor-pointer"
+                        className="inline-flex h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-primary text-[15px] font-semibold text-white cursor-pointer active:scale-[0.99]"
                       >
-                        <RefreshCw className="h-3.5 w-3.5" /> Hubungkan ulang Gmail
+                        <RefreshCw className="h-4 w-4" /> Hubungkan ulang Gmail
                       </button>
                     </div>
                   )}
                 </div>
               ))}
               {status && (
-                <p className="font-mono text-[11px] text-lichen">
+                <p className="text-[13px] text-muted-foreground">
                   sync terakhir: {status.last_synced_at ? new Date(status.last_synced_at).toLocaleString('id-ID') : 'belum pernah'}
                   {status.total_scanned ? ` · ${status.total_scanned} email dipindai` : ''}
                 </p>
@@ -454,9 +443,9 @@ export default function AkunPage() {
               <button
                 type="button"
                 onClick={() => setSenderOpen(true)}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-sm border border-border bg-card text-xs font-medium text-lichen transition-colors hover:bg-mint cursor-pointer"
+                className="inline-flex h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-secondary text-[15px] font-semibold text-primary cursor-pointer active:scale-[0.99]"
               >
-                <Plus className="h-3.5 w-3.5" /> Tambah pengirim
+                <Plus className="h-4 w-4" /> Tambah pengirim
               </button>
 
               {senders.length > 0 && (() => {
@@ -495,62 +484,56 @@ export default function AkunPage() {
 
                 return (
                   <div className="pt-1 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="flex items-center gap-1.5 font-mono text-[11px] font-medium tracking-wide text-saffron uppercase">
-                        <ShieldCheck className="h-3.5 w-3.5" /> Email yang dibaca ({senders.filter((s) => s.allowed).length}/{senders.length})
+                    <div className="flex items-center justify-between gap-2 px-4">
+                      <p className="text-[13px] text-muted-foreground">
+                        Email yang dibaca ({senders.filter((s) => s.allowed).length}/{senders.length})
                       </p>
                     </div>
 
                     <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-lichen" />
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         value={senderSearch}
                         onValueChange={setSenderSearch}
-                        placeholder="Cari pengirim atau domain…"
+                        placeholder="Cari pengirim"
                         aria-label="Cari pengirim"
-                        className="h-9 pl-8 text-xs"
+                        className="h-9 rounded-[10px] pl-9 text-[17px]"
                       />
                     </div>
 
                     <div className="max-h-96 space-y-4 overflow-y-auto pr-0.5">
                       {filtered.length === 0 ? (
-                        <p className="text-center text-xs text-lichen py-4">Tidak ada pengirim yang cocok dengan "{senderSearch}"</p>
+                        <p className="text-center text-[15px] text-muted-foreground py-4">Tidak ada pengirim yang cocok dengan "{senderSearch}"</p>
                       ) : (
                         categories.map((cat) => (
-                          <div key={cat} className="space-y-1.5">
-                            <p className="font-heading text-xs font-semibold text-forest-ink/70 border-b border-border/50 pb-1">{cat}</p>
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          <div key={cat}>
+                            <p className="mb-1.5 px-4 text-[13px] text-muted-foreground">{cat}</p>
+                            <Panel className="divide-y divide-border/60">
                               {grouped[cat].map((s) => (
-                                <div key={s.domain} className="flex min-w-0 items-start gap-1.5 rounded-md border border-border bg-card p-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleSender(s.domain, s.allowed)}
-                                    className="flex min-w-0 flex-1 items-start gap-2 text-left cursor-pointer"
-                                  >
-                                    <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border ${
-                                      s.allowed ? 'border-forest-ink bg-forest-ink text-white' : 'border-border text-transparent'
-                                    }`}>
-                                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                      <span className="block truncate text-xs font-medium text-forest-ink" title={s.label || s.domain}>{s.label || s.domain}</span>
-                                      <span className="block truncate font-mono text-[10px] text-lichen" title={s.domain}>{s.domain}</span>
-                                    </span>
-                                  </button>
+                                <div key={s.domain} className="flex min-w-0 items-center gap-3 px-4 py-2.5">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[17px] text-foreground" title={s.label || s.domain}>{s.label || s.domain}</p>
+                                    <p className="truncate text-[13px] text-muted-foreground" title={s.domain}>{s.domain}</p>
+                                  </div>
                                   {s.can_delete && (
                                     <button
                                       type="button"
                                       onClick={() => setPendingSender(s)}
                                       disabled={busy === `del:${s.id}`}
                                       aria-label="Hapus pengirim"
-                                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-lichen transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 cursor-pointer"
+                                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground active:bg-secondary active:text-destructive disabled:opacity-50 cursor-pointer"
                                     >
-                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <Trash2 className="h-4 w-4" />
                                     </button>
                                   )}
+                                  <Switch
+                                    checked={!!s.allowed}
+                                    label={`Izinkan ${s.domain}`}
+                                    onChange={() => toggleSender(s.domain, s.allowed)}
+                                  />
                                 </div>
                               ))}
-                            </div>
+                            </Panel>
                           </div>
                         ))
                       )}
@@ -560,60 +543,75 @@ export default function AkunPage() {
               })()}
 
               {/* Pengaturan scan */}
-              <div className="space-y-3 rounded-md border border-border p-3">
-                <p className="eyebrow">Pengaturan scan</p>
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium text-lichen">Jendela email</p>
-                  <div className="flex flex-wrap gap-2">
-                    {WINDOWS.map((w) => (
-                      <Chip
-                        key={w.key}
-                        active={scan.window === w.key}
-                        onClick={() => (w.key === 'custom' ? setScan({ ...scan, window: 'custom' }) : saveScan({ ...scan, window: w.key }))}
+              <div className="space-y-3">
+                <p className="px-4 text-[13px] text-muted-foreground">Pengaturan scan</p>
+                <Panel className="divide-y divide-border/60">
+                  <label className="flex items-center gap-2 px-4 py-2.5">
+                    <span className="flex-1 text-[17px] text-foreground">Jendela email</span>
+                    <span className="relative flex items-center">
+                      <select
+                        value={scan.window}
+                        onChange={(e) => (e.target.value === 'custom' ? setScan({ ...scan, window: 'custom' }) : saveScan({ ...scan, window: e.target.value }))}
+                        aria-label="Jendela email"
+                        className="cursor-pointer appearance-none bg-transparent pr-5 text-right text-[17px] text-muted-foreground outline-none"
                       >
-                        {w.label}
-                      </Chip>
-                    ))}
-                  </div>
-                </div>
+                        {WINDOWS.map((w) => <option key={w.key} value={w.key}>{w.label}</option>)}
+                      </select>
+                      <ChevronRight className="pointer-events-none absolute right-0 h-4 w-4 text-muted-foreground" />
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 px-4 py-2.5">
+                    <span className="flex-1 text-[17px] text-foreground">Batas email</span>
+                    <span className="relative flex items-center">
+                      <select
+                        value={[25, 50, 100, 200, 500, 1000].includes(Number(scan.limit)) ? String(Number(scan.limit)) : 'custom'}
+                        onChange={(e) => (e.target.value === 'custom' ? setScan({ ...scan, limit: '' }) : saveScan({ ...scan, limit: Number(e.target.value) }))}
+                        aria-label="Batas email per sinkronisasi"
+                        className="cursor-pointer appearance-none bg-transparent pr-5 text-right text-[17px] text-muted-foreground outline-none"
+                      >
+                        {[25, 50, 100, 200, 500, 1000].map((l) => <option key={l} value={String(l)}>{l}</option>)}
+                        <option value="custom">Kustom…</option>
+                      </select>
+                      <ChevronRight className="pointer-events-none absolute right-0 h-4 w-4 text-muted-foreground" />
+                    </span>
+                  </label>
+                </Panel>
 
-                {scan.window === 'custom' && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-medium text-lichen">Rentang tanggal</p>
-                    <div className="flex items-center gap-2">
-                      <Input type="date" value={scan.from} onValueChange={(v) => setScan({ ...scan, from: v })} aria-label="Dari tanggal" className="h-10 flex-1" />
-                      <span className="text-xs text-lichen">s/d</span>
-                      <Input type="date" value={scan.to} onValueChange={(v) => setScan({ ...scan, to: v })} aria-label="Sampai tanggal" className="h-10 flex-1" />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={applyCustomRange}
-                      className="h-10 w-full rounded-full border border-forest-ink bg-forest-ink text-xs font-medium text-white cursor-pointer"
-                    >
-                      Terapkan rentang
-                    </button>
-                  </div>
-                )}
-
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium text-lichen">Maksimal email per sinkronisasi</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {[25, 50, 100, 200].map((l) => (
-                      <Chip key={l} active={Number(scan.limit) === l} onClick={() => saveScan({ ...scan, limit: l })}>{l}</Chip>
-                    ))}
+                {![25, 50, 100, 200, 500, 1000].includes(Number(scan.limit)) && (
+                  <Panel className="flex items-center gap-2 px-4 py-2.5">
+                    <span className="flex-1 text-[17px] text-foreground">Jumlah kustom</span>
                     <Input
                       value={String(scan.limit ?? '')}
                       onValueChange={(v) => setScan({ ...scan, limit: v.replace(/[^0-9]/g, '') })}
                       onBlur={commitLimit}
                       onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                       inputMode="numeric"
-                      aria-label="Maksimal email"
-                      className="tnum h-9 w-20 text-center font-mono text-xs"
+                      autoFocus
+                      aria-label="Jumlah email kustom"
+                      className="tnum h-9 w-24 rounded-none bg-transparent px-0 text-right text-[17px]"
                     />
-                    <span className="text-[11px] text-lichen">email (1–1000)</span>
+                  </Panel>
+                )}
+
+                {scan.window === 'custom' && (
+                  <div className="space-y-2">
+                    <p className="text-[13px] text-muted-foreground">Rentang tanggal</p>
+                    <div className="flex items-center gap-2">
+                      <Input type="date" value={scan.from} onValueChange={(v) => setScan({ ...scan, from: v })} aria-label="Dari tanggal" className="h-11 flex-1" />
+                      <span className="text-[13px] text-muted-foreground">s/d</span>
+                      <Input type="date" value={scan.to} onValueChange={(v) => setScan({ ...scan, to: v })} aria-label="Sampai tanggal" className="h-11 flex-1" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={applyCustomRange}
+                      className="h-[44px] w-full rounded-xl bg-primary text-[15px] font-semibold text-white cursor-pointer active:scale-[0.99]"
+                    >
+                      Terapkan rentang
+                    </button>
                   </div>
-                </div>
-                <p className="text-[11px] leading-relaxed text-lichen">
+                )}
+
+                <p className="px-4 text-[13px] leading-relaxed text-muted-foreground">
                   {scan.window === 'custom'
                     ? `Scan email dalam rentang ${scan.from || '…'} s/d ${scan.to || '…'}, maksimal ${scan.limit || 100} email.`
                     : scan.window === 'month'
@@ -625,36 +623,36 @@ export default function AkunPage() {
 
               {/* Progres job */}
               {p && (
-                <div className="space-y-2 rounded-md border border-border bg-mint/40 p-3">
+                <div className="space-y-2 rounded-xl bg-secondary p-4">
                   <div className="flex items-center justify-between">
-                    <p className="eyebrow">{p.status === 'paused' ? 'Dijeda' : p.status === 'canceling' ? 'Menghentikan…' : p.status === 'done' ? 'Selesai' : p.status === 'error' ? 'Gagal' : 'Berjalan'}</p>
-                    <span className="tnum font-mono text-[11px] text-lichen">{p.processed}/{p.total || '?'}</span>
+                    <p className="text-[13px] text-muted-foreground">{p.status === 'paused' ? 'Dijeda' : p.status === 'canceling' ? 'Menghentikan…' : p.status === 'done' ? 'Selesai' : p.status === 'error' ? 'Gagal' : 'Berjalan'}</p>
+                    <span className="tnum text-[13px] text-muted-foreground">{p.processed}/{p.total || '?'}</span>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
                     {isIndeterminate ? (
-                      <div className="h-full w-1/3 rounded-full bg-network animate-pulse" />
+                      <div className="h-full w-1/3 rounded-full bg-primary animate-pulse" />
                     ) : (
                       <div
-                        className={`h-full rounded-full ${p.status === 'error' ? 'bg-destructive' : 'bg-network'} transition-[width] duration-300`}
+                        className={`h-full rounded-full ${p.status === 'error' ? 'bg-destructive' : 'bg-primary'} transition-[width] duration-300`}
                         style={{ width: `${Math.max(2, pct)}%` }}
                       />
                     )}
                   </div>
-                  <p className="truncate font-mono text-[11px] text-lichen">{p.current || p.message}</p>
+                  <p className="truncate text-[13px] text-muted-foreground">{p.current || p.message}</p>
                   <div className="flex gap-2">
                     {p.status === 'running' && (
-                      <button type="button" onClick={() => control('pause')} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full border border-forest-ink bg-transparent text-xs font-medium text-forest-ink cursor-pointer">
-                        <Pause className="h-3.5 w-3.5" /> Jeda
+                      <button type="button" onClick={() => control('pause')} className="inline-flex h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-card text-[15px] font-semibold text-primary cursor-pointer active:scale-[0.98]">
+                        <Pause className="h-4 w-4" /> Jeda
                       </button>
                     )}
                     {p.status === 'paused' && (
-                      <button type="button" onClick={() => control('resume')} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full border border-forest-ink bg-forest-ink text-xs font-medium text-white cursor-pointer">
-                        <Play className="h-3.5 w-3.5" /> Lanjut
+                      <button type="button" onClick={() => control('resume')} className="inline-flex h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary text-[15px] font-semibold text-white cursor-pointer active:scale-[0.98]">
+                        <Play className="h-4 w-4" /> Lanjut
                       </button>
                     )}
                     {jobActive && (
-                      <button type="button" onClick={() => control('cancel')} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full border border-destructive/50 text-xs font-medium text-destructive cursor-pointer">
-                        <Square className="h-3.5 w-3.5" /> Hentikan
+                      <button type="button" onClick={() => control('cancel')} className="inline-flex h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-card text-[15px] font-semibold text-destructive cursor-pointer active:scale-[0.98]">
+                        <Square className="h-4 w-4" /> Hentikan
                       </button>
                     )}
                   </div>
@@ -666,15 +664,15 @@ export default function AkunPage() {
                   type="button"
                   onClick={() => runSync(false)}
                   disabled={!!jobActive}
-                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full border border-forest-ink bg-forest-ink text-xs font-medium text-white transition-colors hover:bg-forest-ink/90 disabled:opacity-60 cursor-pointer"
+                  className="inline-flex h-[50px] flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-[17px] font-semibold text-white disabled:opacity-50 cursor-pointer active:scale-[0.99]"
                 >
-                  <RefreshCw className="h-3.5 w-3.5" /> Sync sekarang
+                  <RefreshCw className="h-5 w-5" /> Sync
                 </button>
                 <button
                   type="button"
                   onClick={() => runSync(true)}
                   disabled={!!jobActive}
-                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full border border-forest-ink bg-transparent text-xs font-medium text-forest-ink transition-colors hover:bg-forest-ink/5 disabled:opacity-60 cursor-pointer"
+                  className="inline-flex h-[50px] flex-1 items-center justify-center gap-2 rounded-xl bg-secondary text-[17px] font-semibold text-primary disabled:opacity-50 cursor-pointer active:scale-[0.99]"
                 >
                   Scan ulang
                 </button>
@@ -687,19 +685,10 @@ export default function AkunPage() {
       {/* Tampilan */}
       <div className={akunTab === 'akun' ? '' : 'hidden'}>
         <SectionTitle>Tampilan</SectionTitle>
-        <Panel className="flex items-center gap-3 px-4 py-3.5">
-          {dark ? <Moon className="h-4 w-4 text-lichen" /> : <Sun className="h-4 w-4 text-lichen" />}
-          <span className="flex-1 text-sm font-medium text-forest-ink">Mode gelap</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={dark}
-            aria-label="Mode gelap"
-            onClick={() => setDark(toggleTheme() === 'dark')}
-            className={`relative h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors ${dark ? 'bg-forest-ink' : 'bg-border'}`}
-          >
-            <span className={`absolute top-0.5 h-6 w-6 rounded-full shadow transition-all ${dark ? 'left-[22px] bg-[#0b1a1a]' : 'left-0.5 bg-white'}`} />
-          </button>
+        <Panel className="flex items-center gap-3 px-4 py-3">
+          {dark ? <Moon className="h-5 w-5 text-muted-foreground" /> : <Sun className="h-5 w-5 text-muted-foreground" />}
+          <span className="flex-1 text-[17px] text-foreground">Mode gelap</span>
+          <Switch checked={dark} label="Mode gelap" onChange={() => setDark(toggleTheme() === 'dark')} />
         </Panel>
       </div>
 
@@ -711,13 +700,14 @@ export default function AkunPage() {
             <button
               type="button"
               onClick={install}
-              className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-mint cursor-pointer"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-secondary cursor-pointer"
             >
-              <Download className="h-4 w-4 shrink-0 text-lichen" />
+              <Download className="h-5 w-5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-forest-ink">Install aplikasi</span>
-                <span className="block truncate text-xs text-lichen">Buka dari layar utama, fullscreen tanpa browser</span>
+                <span className="block text-[17px] text-foreground">Install aplikasi</span>
+                <span className="block truncate text-[13px] text-muted-foreground">Buka dari layar utama, fullscreen tanpa browser</span>
               </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
             </button>
           </Panel>
         </div>
@@ -725,26 +715,26 @@ export default function AkunPage() {
 
       {/* Akun */}
       <div className={akunTab === 'akun' ? '' : 'hidden'}>
-        <SectionTitle>Akun</SectionTitle>        <Panel className="divide-y divide-border">
+        <SectionTitle>Akun</SectionTitle>        <Panel className="divide-y divide-border/60">
           <button
             type="button"
             onClick={onLogout}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-sm font-medium text-forest-ink transition-colors hover:bg-mint cursor-pointer"
+            className="flex w-full items-center gap-3 px-4 py-3 text-left text-[17px] text-primary active:bg-secondary cursor-pointer"
           >
-            <LogOut className="h-4 w-4 text-lichen" /> Keluar
+            <LogOut className="h-5 w-5 text-muted-foreground" /> Keluar
           </button>
           <button
             type="button"
             onClick={() => setPendingDeleteAccount(true)}
             disabled={busy === 'del'}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-sm font-medium text-destructive transition-colors hover:bg-destructive/5 disabled:opacity-50 cursor-pointer"
+            className="flex w-full items-center gap-3 px-4 py-3 text-left text-[17px] text-destructive active:bg-secondary disabled:opacity-50 cursor-pointer"
           >
-            <Trash2 className="h-4 w-4" /> {busy === 'del' ? 'Menghapus…' : 'Hapus akun & data'}
+            <Trash2 className="h-5 w-5" /> {busy === 'del' ? 'Menghapus…' : 'Hapus akun & data'}
           </button>
         </Panel>
       </div>
 
-      <p className={`px-4 text-center font-mono text-[11px] leading-relaxed text-lichen ${akunTab === 'akun' ? '' : 'hidden'}`}>
+      <p className={`px-4 text-center text-[13px] leading-relaxed text-muted-foreground ${akunTab === 'akun' ? '' : 'hidden'}`}>
         Spendly hanya membaca email dari pengirim yang kamu izinkan. Isi email tidak disimpan.
       </p>
 
@@ -757,7 +747,7 @@ export default function AkunPage() {
               onClick={loadHistory}
               disabled={historyLoading}
               aria-label="Muat ulang riwayat"
-              className="flex h-7 w-7 items-center justify-center rounded-full text-lichen transition-colors hover:bg-mint disabled:opacity-50 cursor-pointer"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground active:bg-secondary disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
             </button>
@@ -767,39 +757,39 @@ export default function AkunPage() {
         </SectionTitle>
         {historyLoading && history.length === 0 ? (
           <div className="space-y-2">
-            {[0, 1, 2].map((i) => <Skeleton key={i} className="h-[64px] w-full rounded-lg" />)}
+            {[0, 1, 2].map((i) => <Skeleton key={i} className="h-[68px] w-full rounded-xl bg-secondary" />)}
           </div>
         ) : history.length === 0 ? (
           <Panel className="px-6 py-10 text-center">
-            <p className="font-heading text-[15px] font-medium text-forest-ink">Belum ada riwayat</p>
-            <p className="mx-auto mt-1 max-w-[17rem] text-xs leading-relaxed text-lichen">
+            <p className="text-[17px] font-semibold text-foreground">Belum ada riwayat</p>
+            <p className="mx-auto mt-1 max-w-[17rem] text-[13px] leading-relaxed text-muted-foreground">
               {conns.length === 0
                 ? 'Hubungkan Gmail dan jalankan sinkronisasi dulu.'
                 : 'Jalankan sinkronisasi di tab Sinkron untuk melihat riwayatnya di sini.'}
             </p>
           </Panel>
         ) : (
-          <Panel className="divide-y divide-border">
+          <Panel className="divide-y divide-border/60">
             {history.map((h) => (
               <button
                 key={h.id}
                 type="button"
                 onClick={() => navigate(`/akun/sync/${h.id}`)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-mint cursor-pointer"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-secondary cursor-pointer"
               >
-                <span className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] font-medium ${JOB_STATUS_STYLE[h.status] || JOB_STATUS_STYLE.canceled}`}>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[13px] font-medium ${JOB_STATUS_STYLE[h.status] || JOB_STATUS_STYLE.canceled}`}>
                   {JOB_STATUS_LABEL[h.status] || h.status}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium text-forest-ink">
+                  <span className="block truncate text-[15px] text-foreground">
                     {h.mode === 'backfill' ? 'Penuh' : 'Inkremental'} · {h.new} baru · {h.gated} diabaikan · {h.extracted} diekstrak
                   </span>
-                  <span className="tnum block truncate font-mono text-[11px] text-lichen">
+                  <span className="tnum block truncate text-[13px] text-muted-foreground">
                     {h.created_at ? formatDate(h.created_at) : ''}
                     {h.message ? ` · ${h.message}` : ''}
                   </span>
                 </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-lichen" />
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </button>
             ))}
           </Panel>
