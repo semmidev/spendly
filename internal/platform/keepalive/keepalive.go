@@ -19,7 +19,6 @@ func Start(ctx context.Context, target string, interval time.Duration) {
 	}
 	urls := []string{
 		target + "/health/live",
-		"https://info-gizi-bumil-remaja.onrender.com",
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	t := time.NewTicker(interval)
