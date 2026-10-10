@@ -21,8 +21,9 @@ func Start(ctx context.Context, target string, interval time.Duration) {
 		target + "/health/live",
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
+	wib := time.FixedZone("WIB", 7*3600)
 	t := time.NewTicker(interval)
-	slog.Info("self-ping aktif", "urls", urls, "interval", interval.String())
+	slog.Info("self-ping aktif", "urls", urls, "interval", interval.String(), "window", "06:00-23:00 WIB")
 	go func() {
 		defer t.Stop()
 		for {
@@ -30,6 +31,11 @@ func Start(ctx context.Context, target string, interval time.Duration) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
+				// Hanya 06:00-23:00 WIB; di luar itu biarkan instance sleep.
+				if h := time.Now().In(wib).Hour(); h < 6 || h >= 23 {
+					continue
+				}
+
 				for _, u := range urls {
 					req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 					if err != nil {
@@ -43,8 +49,6 @@ func Start(ctx context.Context, target string, interval time.Duration) {
 					resp.Body.Close()
 					if resp.StatusCode >= 400 {
 						slog.Warn("ping keepalive status buruk", "url", u, "status", resp.Status)
-					} else {
-						slog.Debug("ping keepalive ok", "url", u, "status", resp.Status)
 					}
 				}
 			}
